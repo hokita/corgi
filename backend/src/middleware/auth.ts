@@ -17,7 +17,7 @@ export async function authMiddleware(
   }
   try {
     const decoded = await getAuth().verifyIdToken(token)
-    if (decoded.email !== process.env.ALLOWED_EMAIL) {
+    if (!decoded.email || decoded.email !== process.env.ALLOWED_EMAIL) {
       res.status(401).json({ error: 'Unauthorized' })
       return
     }

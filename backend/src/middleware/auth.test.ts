@@ -52,4 +52,12 @@ describe('authMiddleware', () => {
     expect(res.status).toBe(200)
     expect(res.body.uid).toBe('u1')
   })
+
+  it('returns 401 when token has no email claim', async () => {
+    mockVerifyIdToken.mockResolvedValue({ uid: 'u1', email: undefined })
+    const res = await request(app)
+      .get('/test')
+      .set('Authorization', 'Bearer no-email-token')
+    expect(res.status).toBe(401)
+  })
 })
