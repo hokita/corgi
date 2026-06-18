@@ -1,14 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { getAuth } from 'firebase-admin/auth'
 
-declare global {
-  namespace Express {
-    interface Request {
-      uid?: string
-    }
-  }
-}
-
 export async function authMiddleware(
   req: Request,
   res: Response,
