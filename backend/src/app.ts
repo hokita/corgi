@@ -1,5 +1,8 @@
 import express from 'express'
 import cors from 'cors'
+import { authMiddleware } from './middleware/auth'
+import { GeminiProvider } from './providers/GeminiProvider'
+import { createConversationsRouter } from './routes/conversations'
 
 export function createApp() {
   const app = express()
@@ -7,5 +10,10 @@ export function createApp() {
   app.use(cors({ origin: process.env.FRONTEND_URL }))
   app.use(express.json())
   app.get('/healthz', (_req, res) => res.json({ ok: true }))
+  app.use(
+    '/api/conversations',
+    authMiddleware,
+    createConversationsRouter(new GeminiProvider(process.env.GEMINI_API_KEY!))
+  )
   return app
 }
