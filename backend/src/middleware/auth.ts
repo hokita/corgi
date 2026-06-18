@@ -1,8 +1,12 @@
 import type { Request, Response, NextFunction } from 'express'
 import { getAuth } from 'firebase-admin/auth'
 
-export interface AuthRequest extends Request {
-  uid: string
+declare global {
+  namespace Express {
+    interface Request {
+      uid?: string
+    }
+  }
 }
 
 export async function authMiddleware(
@@ -21,7 +25,7 @@ export async function authMiddleware(
       res.status(401).json({ error: 'Unauthorized' })
       return
     }
-    ;(req as AuthRequest).uid = decoded.uid
+    req.uid = decoded.uid
     next()
   } catch {
     res.status(401).json({ error: 'Invalid token' })

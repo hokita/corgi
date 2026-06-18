@@ -39,7 +39,7 @@ import * as firestoreService from '../services/firestore'
 const mockAI: AIProvider = { chat: vi.fn().mockResolvedValue('AI reply') }
 
 function mockAuth(req: Request, _: Response, next: NextFunction) {
-  ;(req as any).uid = 'u1'
+  req.uid = 'u1'
   next()
 }
 

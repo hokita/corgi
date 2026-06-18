@@ -1,6 +1,5 @@
 import { Router } from 'express'
 import type { AIProvider } from '../providers/AIProvider'
-import type { AuthRequest } from '../middleware/auth'
 import * as db from '../services/firestore'
 
 export function createConversationsRouter(ai: AIProvider): Router {
@@ -9,7 +8,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
   router.post('/', async (req, res) => {
     try {
       const { message } = req.body
-      const uid = (req as AuthRequest).uid
+      const uid = req.uid!
       if (!message?.trim()) {
         res.status(400).json({ error: 'message is required' })
         return
@@ -30,7 +29,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
   router.post('/:id/messages', async (req, res) => {
     try {
       const { message } = req.body
-      const uid = (req as AuthRequest).uid
+      const uid = req.uid!
       const { id } = req.params
       if (!message?.trim()) {
         res.status(400).json({ error: 'message is required' })
@@ -56,7 +55,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
   router.get('/', async (req, res) => {
     try {
-      const uid = (req as AuthRequest).uid
+      const uid = req.uid!
       const conversations = await db.listConversations(uid)
       res.json(
         conversations.map((c) => ({
@@ -74,7 +73,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
   router.get('/:id/messages', async (req, res) => {
     try {
-      const uid = (req as AuthRequest).uid
+      const uid = req.uid!
       const { id } = req.params
       const conversation = await db.getConversation(id, uid)
       if (!conversation) {
@@ -91,7 +90,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
   router.delete('/:id', async (req, res) => {
     try {
-      const uid = (req as AuthRequest).uid
+      const uid = req.uid!
       const { id } = req.params
       const conversation = await db.getConversation(id, uid)
       if (!conversation) {

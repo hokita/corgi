@@ -9,12 +9,11 @@ vi.mock('firebase-admin/auth', () => ({
 }))
 
 import { authMiddleware } from './auth'
-import type { AuthRequest } from './auth'
 
 const app = express()
 app.use(express.json())
 app.get('/test', authMiddleware, (req: Request, res: Response) =>
-  res.json({ uid: (req as AuthRequest).uid })
+  res.json({ uid: req.uid })
 )
 
 describe('authMiddleware', () => {
