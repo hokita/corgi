@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 
 const mockSendMessage = vi.fn()
 const mockStartChat = vi.fn(() => ({ sendMessage: mockSendMessage }))
@@ -13,6 +13,8 @@ vi.mock('@google/generative-ai', () => ({
 import { GeminiProvider } from './GeminiProvider'
 
 describe('GeminiProvider', () => {
+  beforeEach(() => vi.clearAllMocks())
+
   it('returns the response text from Gemini', async () => {
     mockSendMessage.mockResolvedValue({
       response: { text: () => 'Hello from Gemini' },
