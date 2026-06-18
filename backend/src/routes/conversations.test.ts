@@ -14,17 +14,15 @@ vi.mock('../services/firestore', () => ({
     createdAt: null,
     updatedAt: null,
   }),
-  listConversations: vi
-    .fn()
-    .mockResolvedValue([
-      {
-        id: 'conv123',
-        uid: 'u1',
-        title: 'Hello world',
-        lastMessage: 'Hi',
-        updatedAt: { toDate: () => new Date('2024-01-01') },
-      },
-    ]),
+  listConversations: vi.fn().mockResolvedValue([
+    {
+      id: 'conv123',
+      uid: 'u1',
+      title: 'Hello world',
+      lastMessage: 'Hi',
+      updatedAt: { toDate: () => new Date('2024-01-01') },
+    },
+  ]),
   addMessage: vi.fn().mockResolvedValue(undefined),
   getMessages: vi
     .fn()
@@ -88,6 +86,11 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/missing/messages')
       .send({ message: 'hi' })
     expect(res.status).toBe(404)
+  })
+
+  it('returns 400 when message is missing', async () => {
+    const res = await request(app).post('/api/conversations/conv123/messages').send({})
+    expect(res.status).toBe(400)
   })
 })
 
