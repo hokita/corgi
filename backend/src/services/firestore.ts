@@ -44,7 +44,7 @@ export async function listConversations(uid: string): Promise<ConversationDoc[]>
     .where('uid', '==', uid)
     .orderBy('updatedAt', 'desc')
     .get()
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ConversationDoc))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversationDoc)
 }
 
 export async function addMessage(

@@ -30,34 +30,26 @@ describe('authMiddleware', () => {
 
   it('returns 401 when token verification fails', async () => {
     mockVerifyIdToken.mockRejectedValue(new Error('Invalid token'))
-    const res = await request(app)
-      .get('/test')
-      .set('Authorization', 'Bearer bad-token')
+    const res = await request(app).get('/test').set('Authorization', 'Bearer bad-token')
     expect(res.status).toBe(401)
   })
 
   it('returns 401 when email is not in allowlist', async () => {
     mockVerifyIdToken.mockResolvedValue({ uid: 'u1', email: 'other@example.com' })
-    const res = await request(app)
-      .get('/test')
-      .set('Authorization', 'Bearer valid-token')
+    const res = await request(app).get('/test').set('Authorization', 'Bearer valid-token')
     expect(res.status).toBe(401)
   })
 
   it('calls next and sets uid when token is valid and email matches', async () => {
     mockVerifyIdToken.mockResolvedValue({ uid: 'u1', email: 'owner@example.com' })
-    const res = await request(app)
-      .get('/test')
-      .set('Authorization', 'Bearer valid-token')
+    const res = await request(app).get('/test').set('Authorization', 'Bearer valid-token')
     expect(res.status).toBe(200)
     expect(res.body.uid).toBe('u1')
   })
 
   it('returns 401 when token has no email claim', async () => {
     mockVerifyIdToken.mockResolvedValue({ uid: 'u1', email: undefined })
-    const res = await request(app)
-      .get('/test')
-      .set('Authorization', 'Bearer no-email-token')
+    const res = await request(app).get('/test').set('Authorization', 'Bearer no-email-token')
     expect(res.status).toBe(401)
   })
 })
