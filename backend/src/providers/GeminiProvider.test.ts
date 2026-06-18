@@ -13,7 +13,7 @@ vi.mock('@google/generative-ai', () => ({
 import { GeminiProvider } from './GeminiProvider'
 
 describe('GeminiProvider', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns the response text from Gemini', async () => {
     mockSendMessage.mockResolvedValue({

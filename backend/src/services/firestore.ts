@@ -1,5 +1,4 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import type { Message } from '../providers/AIProvider'
 
 export interface ConversationDoc {
   id: string
