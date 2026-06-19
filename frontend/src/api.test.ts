@@ -13,7 +13,7 @@ import { api } from './api'
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => { vi.clearAllMocks() })
 
 function mockResponse(body: unknown, status = 200) {
   mockFetch.mockResolvedValue({
