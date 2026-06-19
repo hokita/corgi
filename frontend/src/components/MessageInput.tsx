@@ -28,11 +28,7 @@ export default function MessageInput({ onSend, disabled }: Props) {
   }
 
   return (
-    <div style={{
-      display: 'flex', gap: '8px', padding: '12px',
-      paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-      borderTop: '1px solid #e0e0e0', background: '#fff',
-    }}>
+    <div className="flex gap-2 p-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-gray-200 bg-white">
       <textarea
         ref={textareaRef}
         value={text}
@@ -41,20 +37,12 @@ export default function MessageInput({ onSend, disabled }: Props) {
         disabled={disabled}
         placeholder="Message..."
         rows={1}
-        style={{
-          flex: 1, resize: 'none', border: '1px solid #e0e0e0',
-          borderRadius: '20px', padding: '10px 14px', fontSize: '16px',
-          outline: 'none', fontFamily: 'inherit',
-        }}
+        className="flex-1 resize-none border border-gray-200 rounded-[20px] px-3.5 py-2.5 text-base outline-none font-[inherit] disabled:opacity-50"
       />
       <button
         onClick={handleSend}
         disabled={disabled || !text.trim()}
-        style={{
-          width: '40px', height: '40px', borderRadius: '50%',
-          background: '#0084ff', border: 'none', color: '#fff',
-          fontSize: '18px', cursor: 'pointer', flexShrink: 0, alignSelf: 'flex-end',
-        }}
+        className="w-10 h-10 rounded-full bg-[#0084ff] border-none text-white text-lg cursor-pointer shrink-0 self-end disabled:opacity-40 disabled:cursor-not-allowed"
       >
         ↑
       </button>

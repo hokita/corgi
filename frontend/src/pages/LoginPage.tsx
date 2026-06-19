@@ -8,26 +8,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100dvh',
-        gap: '24px',
-      }}
-    >
-      <h1 style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>corgi</h1>
+    <div className="flex flex-col items-center justify-center min-h-dvh gap-6">
+      <h1 className="text-3xl font-bold m-0">corgi</h1>
       <button
         onClick={handleSignIn}
-        style={{
-          padding: '12px 24px',
-          fontSize: '1rem',
-          cursor: 'pointer',
-          borderRadius: '8px',
-          border: '1px solid #ccc',
-        }}
+        className="px-6 py-3 text-base cursor-pointer rounded-lg border border-gray-300 hover:bg-gray-50 active:bg-gray-100"
       >
         Sign in with Google
       </button>

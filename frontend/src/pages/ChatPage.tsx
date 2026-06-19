@@ -76,21 +76,26 @@ export default function ChatPage({ user }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: '600px', margin: '0 auto', position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e0e0e0', background: '#fff' }}>
-        <button onClick={() => setDrawerOpen(true)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', padding: '4px' }}>☰</button>
-        <span style={{ fontWeight: 'bold' }}>corgi</span>
+    <div className="flex flex-col h-dvh max-w-[600px] mx-auto relative">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="bg-transparent border-none text-xl cursor-pointer p-1 leading-none"
+        >
+          ☰
+        </button>
+        <span className="font-bold">corgi</span>
         <img
           src={user.photoURL ?? undefined}
           alt={user.displayName ?? 'user'}
           onClick={() => signOut(auth)}
           title="Sign out"
-          style={{ width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}
+          className="w-8 h-8 rounded-full cursor-pointer"
         />
       </div>
 
       {messages.length === 0 && !sending ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+        <div className="flex-1 flex items-center justify-center text-gray-400">
           Start a conversation
         </div>
       ) : (
