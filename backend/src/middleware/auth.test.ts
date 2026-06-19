@@ -12,9 +12,7 @@ import { authMiddleware } from './auth'
 
 const app = express()
 app.use(express.json())
-app.get('/test', authMiddleware, (req: Request, res: Response) =>
-  res.json({ uid: req.uid })
-)
+app.get('/test', authMiddleware, (req: Request, res: Response) => res.json({ uid: req.uid }))
 
 describe('authMiddleware', () => {
   beforeEach(() => {
