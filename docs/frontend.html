@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corgi — Frontend</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.6; padding: 32px 24px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .subtitle { color: #64748b; margin-top: 4px; margin-bottom: 32px; font-size: 14px; }
+    h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f1f5f9; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; font-weight: 600; }
+    td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; color: #0f172a; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .card-blue { border-left: 4px solid #3b82f6; }
+    .card-green { border-left: 4px solid #22c55e; }
+    .card-yellow { border-left: 4px solid #f59e0b; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .flow { display: flex; flex-direction: column; gap: 6px; }
+    .flow-row { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+    .flow-label { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; min-width: 90px; text-align: center; }
+    .tree { font-family: monospace; font-size: 12px; line-height: 2.2; background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .tree-file { color: #0369a1; }
+    .tree-test { color: #94a3b8; }
+    .tree-dir { color: #64748b; }
+    .tree-desc { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #94a3b8; font-size: 11px; }
+    nav { display: flex; gap: 12px; margin-bottom: 28px; }
+    nav a { font-size: 13px; color: #3b82f6; text-decoration: none; padding: 4px 10px; border: 1px solid #bfdbfe; border-radius: 6px; }
+    nav a:hover { background: #eff6ff; }
+    .warning { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #92400e; margin-top: 8px; }
+    .arch { display: flex; flex-direction: column; gap: 0; }
+    .layer { border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden; }
+    .layer-header { padding: 8px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .layer-body { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+    .arch-connector { text-align: center; color: #94a3b8; font-size: 18px; padding: 4px 0; }
+    .layer-entry .layer-header { background: #f1f5f9; color: #475569; }
+    .layer-auth .layer-header { background: #fff7ed; color: #92400e; }
+    .layer-pages .layer-header { background: #eff6ff; color: #1e40af; }
+    .layer-components .layer-header { background: #eef2ff; color: #3730a3; }
+    .layer-api .layer-header { background: #f0fdf4; color: #166534; }
+    .layer-types .layer-header { background: #f8fafc; color: #475569; }
+    .layer-external .layer-header { background: #fef2f2; color: #991b1b; }
+    .module { border-radius: 6px; padding: 8px 10px; font-size: 12px; min-width: 160px; flex: 1; }
+    .module-name { font-weight: 700; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; margin-bottom: 6px; }
+    .module-detail { font-size: 10px; color: #64748b; line-height: 1.7; }
+    .module-detail code { font-size: 10px; }
+    .module-gray { background: #f8fafc; border: 1px solid #e2e8f0; }
+    .module-orange { background: #fff7ed; border: 1px solid #fed7aa; }
+    .module-blue { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .module-slate { background: #f8fafc; border: 1px solid #cbd5e1; }
+    .module-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .module-indigo { background: #eef2ff; border: 1px solid #a5b4fc; }
+    .module-red { background: #fef2f2; border: 1px solid #fca5a5; }
+    .type-tag { display: inline-block; font-size: 9px; font-family: monospace; padding: 1px 5px; border-radius: 3px; margin-right: 3px; margin-bottom: 2px; }
+    .type-req { background: #dbeafe; color: #1e40af; }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } body { padding: 16px; } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav>
+    <a href="backend.html">Backend</a>
+    <a href="frontend.html">Frontend</a>
+  </nav>
+
+  <h1>Corgi — Frontend (PWA)</h1>
+  <p class="subtitle">React 18 · Vite 5 · TypeScript · Tailwind CSS 4 · Firebase Hosting</p>
+
+  <!-- Tech Stack -->
+  <h2>Tech Stack</h2>
+  <div class="card card-blue">
+    <table>
+      <tr><td style="color:#555;width:35%;">Runtime</td><td><code>Node.js 24.17.0</code> pinned via Volta</td></tr>
+      <tr><td style="color:#555;">Language</td><td><code>TypeScript 5</code> · strict · noEmit</td></tr>
+      <tr><td style="color:#555;">UI Library</td><td><code>React 18</code> · JSX transform</td></tr>
+      <tr><td style="color:#555;">Bundler</td><td><code>Vite 5</code></td></tr>
+      <tr><td style="color:#555;">Routing</td><td><code>react-router-dom 6</code></td></tr>
+      <tr><td style="color:#555;">Auth</td><td><code>firebase 10</code> · Google OAuth · signInWithPopup</td></tr>
+      <tr><td style="color:#555;">Styling</td><td><code>Tailwind CSS 4</code> via <code>@tailwindcss/vite</code> — no config file needed</td></tr>
+      <tr><td style="color:#555;">PWA</td><td><code>vite-plugin-pwa</code> · Workbox · standalone display mode</td></tr>
+      <tr><td style="color:#555;">Tests</td><td><code>vitest</code> · <code>@testing-library/react</code> · jsdom · 4 tests</td></tr>
+      <tr><td style="color:#555;">Formatter</td><td>Prettier 3 (shared root .prettierrc)</td></tr>
+    </table>
+  </div>
+
+  <!-- File Structure -->
+  <h2>File Structure &amp; Responsibilities</h2>
+  <div class="tree">
+    <div class="tree-dir">frontend/</div>
+    <div style="margin-left:20px;">
+      <div><span class="tree-file">index.html</span> <span class="tree-desc">— <code>viewport-fit=cover</code> for iOS safe area · div#root · <code>type=module</code> script</span></div>
+      <div><span class="tree-file">vite.config.ts</span> <span class="tree-desc">— react() · tailwindcss() · VitePWA(manifest + Workbox) · vitest(jsdom, globals, setupFiles)</span></div>
+      <div><span class="tree-file">.env.example</span> <span class="tree-desc">— template for VITE_* env vars (copy to .env.local, never commit)</span></div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">public/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">icon-192.png</span> <span class="tree-desc">— PWA home screen icon 192×192 (replace before launch)</span></div>
+        <div><span class="tree-file">icon-512.png</span> <span class="tree-desc">— PWA home screen icon 512×512</span></div>
+      </div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">src/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">main.tsx</span> <span class="tree-desc">— createRoot · StrictMode · BrowserRouter · imports index.css</span></div>
+        <div><span class="tree-file">index.css</span> <span class="tree-desc">— <code>@import "tailwindcss"</code> · box-sizing reset · body { margin:0; font-family; -webkit-text-size-adjust }</span></div>
+        <div><span class="tree-file">App.tsx</span> <span class="tree-desc">— onAuthStateChanged · undefined→null(no flash) · null→/login · User→/ routes</span></div>
+        <div><span class="tree-file">firebase.ts</span> <span class="tree-desc">— initializeApp(VITE_* env vars) · export auth = getAuth(app)</span></div>
+        <div><span class="tree-file">api.ts</span> <span class="tree-desc">— request&lt;T&gt;(): auto Bearer token · throws on !ok · undefined on 204 · listConversations · getMessages · createConversation · sendMessage · deleteConversation</span></div>
+        <div><span class="tree-test">api.test.ts</span> <span class="tree-desc">— 4 tests: fetch mock + Authorization header check per endpoint</span></div>
+        <div><span class="tree-file">types.ts</span> <span class="tree-desc">— <code>Conversation {id, title, lastMessage, updatedAt}</code> · <code>Message {role, content, createdAt}</code></span></div>
+        <div><span class="tree-file">vite-env.d.ts</span> <span class="tree-desc">— <code>/// &lt;reference types="vite/client" /&gt;</code> enables import.meta.env types</span></div>
+        <br>
+        <div class="tree-dir">pages/</div>
+        <div style="margin-left:20px;">
+          <div><span class="tree-file">LoginPage.tsx</span> <span class="tree-desc">— "corgi" h1 · Sign in with Google → GoogleAuthProvider + signInWithPopup(auth)</span></div>
+          <div><span class="tree-file">ChatPage.tsx</span> <span class="tree-desc">— state hub: conversations · activeId · messages · sending · drawerOpen · handleSend (new vs existing) · handleDelete · handleNewChat · optimistic UI</span></div>
+        </div>
+        <br>
+        <div class="tree-dir">components/</div>
+        <div style="margin-left:20px;">
+          <div><span class="tree-file">MessageList.tsx</span> <span class="tree-desc">— user bubbles: right/blue · assistant: left/grey · chat-tail border-radius · auto-scroll to bottom via ref</span></div>
+          <div><span class="tree-file">MessageInput.tsx</span> <span class="tree-desc">— textarea: Enter=send, Shift+Enter=newline · disabled while AI responds · iOS safe-area-inset-bottom · re-focus after reply</span></div>
+          <div><span class="tree-file">HistoryDrawer.tsx</span> <span class="tree-desc">— fixed overlay: z-10 backdrop (click=close) + z-11 drawer (280px left slide) · relativeTime() · delete per item · New chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Flow -->
+  <h2>Auth Flow</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="flow-row"><span class="flow-label" style="background:#dbeafe;color:#1e40af;">① OPEN</span><span>App.tsx calls <code>onAuthStateChanged(auth, setUser)</code></span></div>
+      <div class="flow-row"><span class="flow-label" style="background:#f1f5f9;color:#475569;">② LOADING</span><span><code>user === undefined</code> → return null (prevents screen flash)</span></div>
+      <div class="flow-row"><span class="flow-label" style="background:#fee2e2;color:#991b1b;">③ LOGGED OUT</span><span><code>user === null</code> → redirect to <code>/login</code></span></div>
+      <div class="flow-row"><span class="flow-label" style="background:#fef3c7;color:#92400e;">④ SIGN IN</span><span>Tap button → <code>signInWithPopup(auth, new GoogleAuthProvider())</code></span></div>
+      <div class="flow-row"><span class="flow-label" style="background:#dcfce7;color:#166534;">⑤ LOGGED IN</span><span>Firebase stores session · <code>onAuthStateChanged</code> fires → redirect to <code>/</code></span></div>
+      <div class="flow-row"><span class="flow-label" style="background:#dcfce7;color:#166534;">⑥ API CALLS</span><span><code>auth.currentUser.getIdToken()</code> → fresh JWT auto-attached to every request</span></div>
+    </div>
+  </div>
+
+  <!-- Component Tree -->
+  <h2>Component Tree</h2>
+  <div class="tree">
+    <div><span class="tree-file">BrowserRouter</span></div>
+    <div style="margin-left:20px;"><span class="tree-file">App</span> <span class="tree-desc">— auth gate: loading | logged out | logged in</span></div>
+    <div style="margin-left:40px;">
+      <div><span class="tree-dir">Route /login</span> → <span class="tree-file">LoginPage</span> <span class="tree-desc">— Google sign in</span></div>
+      <div><span class="tree-dir">Route /</span> → <span class="tree-file">ChatPage</span> <span class="tree-desc">— state: conversations, activeId, messages, sending, drawerOpen</span></div>
+      <div style="margin-left:20px;">
+        <div><span class="tree-desc" style="color:#374151;">Header</span> <span class="tree-desc">— hamburger · "corgi" · avatar (tap = sign out)</span></div>
+        <div><span class="tree-file">MessageList</span> <span class="tree-desc">— message bubbles · auto-scroll</span></div>
+        <div><span class="tree-file">MessageInput</span> <span class="tree-desc">— textarea + send button · disabled while AI responds</span></div>
+        <div><span class="tree-file">HistoryDrawer</span> <span class="tree-desc">— (conditional on drawerOpen) slide-in overlay</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Class & Module Architecture -->
+  <h2>Class &amp; Module Architecture</h2>
+  <div class="arch">
+
+    <div class="layer layer-entry">
+      <div class="layer-header">Entry</div>
+      <div class="layer-body">
+        <div class="module module-gray">
+          <div class="module-name">src/main.tsx</div>
+          <div class="module-detail">
+            <code>createRoot()</code> · <code>StrictMode</code> · <code>BrowserRouter</code><br>
+            imports <code>index.css</code> (<code>@import "tailwindcss"</code>)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-auth">
+      <div class="layer-header">Auth Gate</div>
+      <div class="layer-body">
+        <div class="module module-orange">
+          <div class="module-name">src/App.tsx</div>
+          <div class="module-detail">
+            <code>onAuthStateChanged(auth, setUser)</code><br>
+            <code>undefined</code> → return null (prevents screen flash)<br>
+            <code>null</code> → <code>/login</code> · <code>User</code> → <code>/</code><br>
+            passes <code>user: User</code> prop to <code>ChatPage</code>
+          </div>
+        </div>
+        <div class="module module-orange">
+          <div class="module-name">src/firebase.ts</div>
+          <div class="module-detail">
+            <code>initializeApp({ VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID })</code><br>
+            exports <code>auth = getAuth(app)</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-pages">
+      <div class="layer-header">Pages</div>
+      <div class="layer-body">
+        <div class="module module-blue" style="max-width:220px;">
+          <div class="module-name">pages/LoginPage.tsx</div>
+          <div class="module-detail">
+            <code>signInWithPopup(auth, new GoogleAuthProvider())</code><br>
+            "corgi" h1 · Sign in with Google button
+          </div>
+        </div>
+        <div class="module module-blue">
+          <div class="module-name">pages/ChatPage.tsx — state hub</div>
+          <div class="module-detail">
+            state: <code>conversations: Conversation[]</code> · <code>activeId: string | null</code> · <code>messages: Message[]</code> · <code>sending: boolean</code> · <code>drawerOpen: boolean</code><br>
+            <code>handleSend(text)</code> — new vs existing conversation · optimistic UI<br>
+            <code>handleDelete(id)</code> · <code>handleNewChat()</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-components">
+      <div class="layer-header">Components</div>
+      <div class="layer-body">
+        <div class="module module-indigo">
+          <div class="module-name">components/MessageList.tsx</div>
+          <div class="module-detail">
+            props: <code>messages: Message[]</code><br>
+            user bubbles: right/blue · assistant: left/grey<br>
+            chat-tail border-radius · auto-scroll to bottom via ref
+          </div>
+        </div>
+        <div class="module module-indigo">
+          <div class="module-name">components/MessageInput.tsx</div>
+          <div class="module-detail">
+            props: <code>onSend(text: string)</code> · <code>disabled: boolean</code><br>
+            Enter=send · Shift+Enter=newline<br>
+            disabled while AI responds · iOS <code>safe-area-inset-bottom</code> · re-focus after reply
+          </div>
+        </div>
+        <div class="module module-indigo">
+          <div class="module-name">components/HistoryDrawer.tsx</div>
+          <div class="module-detail">
+            props: <code>conversations: Conversation[]</code> · <code>activeId</code> · <code>onSelect</code> · <code>onDelete</code> · <code>onNewChat</code> · <code>onClose</code><br>
+            fixed overlay z-10 (click=close) + drawer z-11 (280px, left slide)<br>
+            <code>relativeTime()</code> helper · delete per item
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-api">
+      <div class="layer-header">API Layer</div>
+      <div class="layer-body">
+        <div class="module module-green">
+          <div class="module-name">src/api.ts</div>
+          <div class="module-detail">
+            <code>request&lt;T&gt;(path, options?)</code> — <code>auth.currentUser.getIdToken()</code> auto-attached as Bearer · throws on <code>!res.ok</code> · <code>undefined</code> on 204<br>
+            <code>api.listConversations()</code> → <code>Conversation[]</code><br>
+            <code>api.getMessages(id)</code> → <code>Message[]</code><br>
+            <code>api.createConversation(message)</code> → <code>{ conversationId, title, assistantMessage }</code><br>
+            <code>api.sendMessage(id, message)</code> → <code>{ assistantMessage }</code><br>
+            <code>api.deleteConversation(id)</code> → <code>void</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-types">
+      <div class="layer-header">Types — src/types.ts</div>
+      <div class="layer-body" style="gap:6px;">
+        <div class="module module-slate" style="flex:none;">
+          <div class="module-detail">
+            <span class="type-tag type-req">Conversation</span> <code style="font-size:10px;">{ id, title, lastMessage, updatedAt: string }</code><br>
+            <span class="type-tag type-req">Message</span> <code style="font-size:10px;">{ role: 'user'|'assistant', content, createdAt: string }</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-external">
+      <div class="layer-header">External</div>
+      <div class="layer-body">
+        <div class="module module-red">
+          <div class="module-name">Firebase Auth</div>
+          <div class="module-detail">Google OAuth · <code>firebase 10</code> · session persisted by SDK</div>
+        </div>
+        <div class="module module-red">
+          <div class="module-name">BFF API</div>
+          <div class="module-detail"><code>VITE_API_URL</code> · Cloud Run (prod) · <code>localhost:8080</code> (dev)</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin-top:8px;font-size:11px;color:#94a3b8;">↓ = render/call flow from entry to external dependencies</p>
+
+  <!-- State -->
+  <h2>ChatPage State</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>State</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>conversations</code></td><td><code>Conversation[]</code></td><td style="font-size:12px;">All conversations for the history drawer, loaded on mount</td></tr>
+        <tr><td><code>activeId</code></td><td><code>string | null</code></td><td style="font-size:12px;">Currently open conversation. <code>null</code> = new chat</td></tr>
+        <tr><td><code>messages</code></td><td><code>Message[]</code></td><td style="font-size:12px;">Messages in the active conversation</td></tr>
+        <tr><td><code>sending</code></td><td><code>boolean</code></td><td style="font-size:12px;">True while waiting for AI. Disables MessageInput.</td></tr>
+        <tr><td><code>drawerOpen</code></td><td><code>boolean</code></td><td style="font-size:12px;">Controls HistoryDrawer visibility</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PWA -->
+  <h2>PWA Configuration</h2>
+  <div class="grid-2">
+    <div class="card card-blue">
+      <div style="font-weight:600;margin-bottom:10px;font-size:13px;">Web App Manifest</div>
+      <table>
+        <tr><td style="font-family:monospace;color:#0369a1;width:45%;">name</td><td style="font-size:12px;">"corgi"</td></tr>
+        <tr><td style="font-family:monospace;color:#0369a1;">display</td><td style="font-size:12px;">"standalone" — no browser chrome</td></tr>
+        <tr><td style="font-family:monospace;color:#0369a1;">theme_color</td><td style="font-size:12px;">#0084ff</td></tr>
+        <tr><td style="font-family:monospace;color:#0369a1;">start_url</td><td style="font-size:12px;">"/"</td></tr>
+        <tr><td style="font-family:monospace;color:#0369a1;">icons</td><td style="font-size:12px;">192×192 + 512×512 PNG</td></tr>
+      </table>
+    </div>
+    <div class="card card-blue">
+      <div style="font-weight:600;margin-bottom:10px;font-size:13px;">Service Worker (Workbox)</div>
+      <table>
+        <tr><td style="color:#555;font-size:12px;width:50%;">registerType</td><td style="font-size:12px;"><code>autoUpdate</code></td></tr>
+        <tr><td style="color:#555;font-size:12px;">Precaches</td><td style="font-size:12px;"><code>**/*.{js,css,html,ico,png,svg}</code></td></tr>
+        <tr><td style="color:#555;font-size:12px;">Runtime cache</td><td style="font-size:12px;">None (API responses not cached)</td></tr>
+        <tr><td style="color:#555;font-size:12px;">Offline</td><td style="font-size:12px;">App shell loads · AI requires network</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Environment Variables -->
+  <h2>Environment Variables (.env.local — never commit)</h2>
+  <div class="card card-blue">
+    <table>
+      <tr><td style="font-family:monospace;color:#0369a1;font-size:11px;width:40%;">VITE_FIREBASE_API_KEY</td><td style="font-size:12px;">From Firebase console → Project settings → Your apps</td></tr>
+      <tr><td style="font-family:monospace;color:#0369a1;font-size:11px;">VITE_FIREBASE_AUTH_DOMAIN</td><td style="font-size:12px;"><code>project-id.firebaseapp.com</code></td></tr>
+      <tr><td style="font-family:monospace;color:#0369a1;font-size:11px;">VITE_FIREBASE_PROJECT_ID</td><td style="font-size:12px;">Firebase project ID</td></tr>
+      <tr><td style="font-family:monospace;color:#0369a1;font-size:11px;">VITE_API_URL</td><td style="font-size:12px;"><code>http://localhost:8080</code> (dev) · Cloud Run URL (prod)</td></tr>
+    </table>
+  </div>
+
+  <!-- Tests -->
+  <h2>Tests — 4 total, all passing ✅</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>File</th><th style="text-align:center;width:60px;">#</th><th>Cases</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/api.test.ts</code></td><td style="text-align:center;font-weight:700;">4</td><td style="font-size:12px;color:#555;">listConversations · createConversation · sendMessage · deleteConversation — all verify <code>Authorization: Bearer</code> header</td></tr>
+      </tbody>
+    </table>
+    <div class="warning" style="margin-top:10px;">⚠️ UI components (ChatPage, MessageList, etc.) are not unit tested — verify by running the dev server</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corgi — Backend (BFF)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.6; padding: 32px 24px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .subtitle { color: #64748b; margin-top: 4px; margin-bottom: 32px; font-size: 14px; }
+    h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f1f5f9; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; font-weight: 600; }
+    td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; color: #0f172a; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .card-green { border-left: 4px solid #22c55e; }
+    .card-purple { border-left: 4px solid #a855f7; }
+    .card-blue { border-left: 4px solid #3b82f6; }
+    .badge { display: inline-block; font-size: 10px; font-family: monospace; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+    .badge-post { background: #dcfce7; color: #166534; }
+    .badge-get { background: #dbeafe; color: #1e40af; }
+    .badge-delete { background: #fee2e2; color: #991b1b; }
+    .badge-pass { background: #dcfce7; color: #166534; }
+    .badge-fail { background: #fee2e2; color: #991b1b; }
+    .flow { display: flex; flex-direction: column; gap: 6px; }
+    .flow-row { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+    .flow-label { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; min-width: 80px; text-align: center; }
+    .tree { font-family: monospace; font-size: 12px; line-height: 2.2; background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .tree-file { color: #166534; }
+    .tree-test { color: #94a3b8; }
+    .tree-dir { color: #64748b; }
+    .tree-desc { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #94a3b8; font-size: 11px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tag-count { font-size: 18px; font-weight: 700; color: #22c55e; }
+    nav { display: flex; gap: 12px; margin-bottom: 28px; }
+    nav a { font-size: 13px; color: #3b82f6; text-decoration: none; padding: 4px 10px; border: 1px solid #bfdbfe; border-radius: 6px; }
+    nav a:hover { background: #eff6ff; }
+    .arch { display: flex; flex-direction: column; gap: 0; }
+    .layer { border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden; }
+    .layer-header { padding: 8px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .layer-body { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+    .arch-connector { text-align: center; color: #94a3b8; font-size: 18px; padding: 4px 0; }
+    .layer-entry .layer-header { background: #f1f5f9; color: #475569; }
+    .layer-middleware .layer-header { background: #fff7ed; color: #92400e; }
+    .layer-routes .layer-header { background: #eff6ff; color: #1e40af; }
+    .layer-models .layer-header { background: #f8fafc; color: #475569; }
+    .layer-providers .layer-header { background: #f0fdf4; color: #166534; }
+    .layer-services .layer-header { background: #fdf4ff; color: #6b21a8; }
+    .layer-external .layer-header { background: #fef2f2; color: #991b1b; }
+    .module { border-radius: 6px; padding: 8px 10px; font-size: 12px; min-width: 160px; flex: 1; }
+    .module-name { font-weight: 700; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; margin-bottom: 6px; }
+    .module-detail { font-size: 10px; color: #64748b; line-height: 1.7; }
+    .module-detail code { font-size: 10px; }
+    .module-gray { background: #f8fafc; border: 1px solid #e2e8f0; }
+    .module-orange { background: #fff7ed; border: 1px solid #fed7aa; }
+    .module-blue { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .module-slate { background: #f8fafc; border: 1px solid #cbd5e1; }
+    .module-green { background: #f0fdf4; border: 1px solid #86efac; }
+    .module-green-if { background: #dcfce7; border: 1px solid #4ade80; }
+    .module-purple { background: #fdf4ff; border: 1px solid #d8b4fe; }
+    .module-red { background: #fef2f2; border: 1px solid #fca5a5; }
+    .type-tag { display: inline-block; font-size: 9px; font-family: monospace; padding: 1px 5px; border-radius: 3px; margin-right: 3px; margin-bottom: 2px; }
+    .type-req { background: #dbeafe; color: #1e40af; }
+    .type-res { background: #dcfce7; color: #166534; }
+    .type-err { background: #fee2e2; color: #991b1b; }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } body { padding: 16px; } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav>
+    <a href="backend.html">Backend</a>
+    <a href="frontend.html">Frontend</a>
+  </nav>
+
+  <h1>Corgi — Backend (BFF)</h1>
+  <p class="subtitle">Cloud Run · Node.js 24 · Express · TypeScript · Firestore · Gemini</p>
+
+  <!-- Tech Stack -->
+  <h2>Tech Stack</h2>
+  <div class="card card-green">
+    <table>
+      <tr><td style="color:#555;width:35%;">Runtime</td><td><code>Node.js 24.17.0</code> pinned via Volta</td></tr>
+      <tr><td style="color:#555;">Language</td><td><code>TypeScript 5</code> · strict mode</td></tr>
+      <tr><td style="color:#555;">Framework</td><td><code>Express 4</code></td></tr>
+      <tr><td style="color:#555;">Auth SDK</td><td><code>firebase-admin 12</code></td></tr>
+      <tr><td style="color:#555;">AI SDK</td><td><code>@google/generative-ai</code></td></tr>
+      <tr><td style="color:#555;">AI Model</td><td><code>gemini-2.5-flash-lite</code></td></tr>
+      <tr><td style="color:#555;">Database</td><td>Firestore via firebase-admin</td></tr>
+      <tr><td style="color:#555;">Tests</td><td><code>vitest</code> + <code>supertest</code> · 17 tests</td></tr>
+      <tr><td style="color:#555;">Container</td><td>Docker · <code>node:24-alpine</code> · multi-stage build</td></tr>
+      <tr><td style="color:#555;">Formatter</td><td>Prettier 3</td></tr>
+    </table>
+  </div>
+
+  <!-- File Structure -->
+  <h2>File Structure &amp; Responsibilities</h2>
+  <div class="tree">
+    <div class="tree-dir">backend/</div>
+    <div style="margin-left:20px;">
+      <div><span class="tree-file">src/index.ts</span> <span class="tree-desc">— Firebase Admin initializeApp() · server listen(port)</span></div>
+      <div><span class="tree-file">src/app.ts</span> <span class="tree-desc">— createApp() factory · CORS(FRONTEND_URL) · JSON body · /healthz · mounts /api/conversations</span></div>
+      <div><span class="tree-file">src/types.d.ts</span> <span class="tree-desc">— <code>declare namespace Express { interface Request { uid?: string } }</code> global augmentation</span></div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">middleware/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">auth.ts</span> <span class="tree-desc">— extract Bearer token · verifyIdToken() · guard undefined email · check ALLOWED_EMAIL · set req.uid</span></div>
+        <div><span class="tree-test">auth.test.ts</span> <span class="tree-desc">— 5 tests</span></div>
+      </div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">providers/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">AIProvider.ts</span> <span class="tree-desc">— <code>interface AIProvider { chat(history, msg): Promise&lt;string&gt; }</code> · <code>type Message</code></span></div>
+        <div><span class="tree-file">GeminiProvider.ts</span> <span class="tree-desc">— implements AIProvider · maps 'assistant'→'model' · startChat() + sendMessage()</span></div>
+        <div><span class="tree-test">GeminiProvider.test.ts</span> <span class="tree-desc">— 2 tests</span></div>
+      </div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">services/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">firestore.ts</span> <span class="tree-desc">— createConversation · getConversation(id, uid) · listConversations · addMessage · getMessages → FirestoreMessage[] · updateLastMessage · deleteConversation (batch)</span></div>
+      </div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">routes/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">conversations.ts</span> <span class="tree-desc">— createConversationsRouter(ai) · 5 endpoints · try/catch → 500 on all handlers · typed with models/api.ts</span></div>
+        <div><span class="tree-test">conversations.test.ts</span> <span class="tree-desc">— 10 tests</span></div>
+      </div>
+      <br>
+      <div class="tree-dir" style="margin-left:16px;">models/</div>
+      <div style="margin-left:36px;">
+        <div><span class="tree-file">api.ts</span> <span class="tree-desc">— CreateConversationRequest/Response · SendMessageRequest/Response · ConversationSummary · MessageResponse · ErrorResponse</span></div>
+      </div>
+      <br>
+      <div><span class="tree-file">Dockerfile</span> <span class="tree-desc">— multi-stage: builder (npm ci + tsc) → runtime (--omit=dev + copy dist/)</span></div>
+      <div><span class="tree-file">.env.example</span> <span class="tree-desc">— template for all required env vars</span></div>
+    </div>
+  </div>
+
+  <!-- Class & Module Architecture -->
+  <h2>Class &amp; Module Architecture</h2>
+  <div class="arch">
+
+    <div class="layer layer-entry">
+      <div class="layer-header">Entry Point</div>
+      <div class="layer-body">
+        <div class="module module-gray" style="max-width:200px;">
+          <div class="module-name">src/index.ts</div>
+          <div class="module-detail">Firebase Admin <code>initializeApp()</code><br>server <code>listen(PORT)</code></div>
+        </div>
+        <div class="module module-gray">
+          <div class="module-name">src/app.ts — <code>createApp()</code></div>
+          <div class="module-detail">
+            CORS(<code>FRONTEND_URL</code>) · JSON body parser<br>
+            <code>/healthz</code> endpoint<br>
+            instantiates <code>new GeminiProvider(GEMINI_API_KEY)</code><br>
+            mounts <code>authMiddleware</code> + <code>createConversationsRouter(ai)</code> at <code>/api/conversations</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-middleware">
+      <div class="layer-header">Middleware</div>
+      <div class="layer-body">
+        <div class="module module-orange">
+          <div class="module-name">middleware/auth.ts — <code>authMiddleware</code></div>
+          <div class="module-detail">
+            Extract <code>Bearer &lt;token&gt;</code> → <code>getAuth().verifyIdToken(token)</code><br>
+            Guard <code>decoded.email</code> → check <code>ALLOWED_EMAIL</code><br>
+            Set <code>req.uid = decoded.uid</code> · reject 401 on any failure
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-routes">
+      <div class="layer-header">Routes</div>
+      <div class="layer-body">
+        <div class="module module-blue">
+          <div class="module-name">routes/conversations.ts — <code>createConversationsRouter(ai: AIProvider)</code></div>
+          <div class="module-detail">
+            <code>POST /</code> · <code>POST /:id/messages</code> · <code>GET /</code> · <code>GET /:id/messages</code> · <code>DELETE /:id</code><br>
+            try/catch → 500 on all handlers · reads <code>req.uid</code> from middleware<br>
+            maps <code>FirestoreMessage[]</code> → <code>Message[]</code> before calling <code>ai.chat()</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div class="layer layer-models">
+      <div class="layer-header">API Types — models/api.ts</div>
+      <div class="layer-body" style="gap:6px;">
+        <div class="module module-slate" style="flex:none;">
+          <div class="module-detail">
+            <span class="type-tag type-req">CreateConversationRequest</span>
+            <span class="type-tag type-req">SendMessageRequest</span>
+            <span class="type-tag type-res">CreateConversationResponse</span>
+            <span class="type-tag type-res">SendMessageResponse</span>
+            <span class="type-tag type-res">ConversationSummary</span>
+            <span class="type-tag type-res">MessageResponse</span>
+            <span class="type-tag type-err">ErrorResponse</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+      <div class="arch">
+        <div class="layer layer-providers">
+          <div class="layer-header">Providers</div>
+          <div class="layer-body" style="flex-direction:column;">
+            <div class="module module-green-if">
+              <div class="module-name">providers/AIProvider.ts</div>
+              <div class="module-detail">
+                <code>interface AIProvider</code><br>
+                &nbsp;&nbsp;<code>chat(history: Message[], newMessage: string): Promise&lt;string&gt;</code><br><br>
+                <code>type Message</code><br>
+                &nbsp;&nbsp;<code>role: 'user' | 'assistant'</code><br>
+                &nbsp;&nbsp;<code>content: string</code>
+              </div>
+            </div>
+            <div class="arch-connector" style="font-size:13px;">↓ implements</div>
+            <div class="module module-green">
+              <div class="module-name">providers/GeminiProvider.ts</div>
+              <div class="module-detail">
+                <code>class GeminiProvider implements AIProvider</code><br>
+                &nbsp;&nbsp;<code>private model: GenerativeModel</code><br>
+                &nbsp;&nbsp;<code>constructor(apiKey: string)</code><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;→ <code>new GoogleGenerativeAI(apiKey)</code><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;→ <code>getGenerativeModel('gemini-2.5-flash-lite')</code><br>
+                &nbsp;&nbsp;<code>chat(history, newMessage)</code><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;→ maps <code>'assistant'</code> → <code>'model'</code><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;→ <code>startChat()</code> + <code>sendMessage()</code>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-connector">↓</div>
+        <div class="layer layer-external">
+          <div class="layer-header">External — Gemini API</div>
+          <div class="layer-body">
+            <div class="module module-red">
+              <div class="module-name">@google/generative-ai</div>
+              <div class="module-detail"><code>gemini-2.5-flash-lite</code> model</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch">
+        <div class="layer layer-services">
+          <div class="layer-header">Services</div>
+          <div class="layer-body" style="flex-direction:column;">
+            <div class="module module-purple">
+              <div class="module-name">services/firestore.ts</div>
+              <div class="module-detail">
+                <code>interface ConversationDoc</code> — <code>id uid title lastMessage createdAt updatedAt</code><br>
+                <code>interface FirestoreMessage</code> — <code>role content createdAt</code><br><br>
+                <code>createConversation(uid, title)</code><br>
+                <code>getConversation(id, uid)</code><br>
+                <code>listConversations(uid)</code><br>
+                <code>addMessage(id, role, content)</code><br>
+                <code>getMessages(id)</code> → <code>FirestoreMessage[]</code><br>
+                <code>updateConversationLastMessage(id, msg)</code><br>
+                <code>deleteConversation(id)</code> — batch delete
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-connector">↓</div>
+        <div class="layer layer-external">
+          <div class="layer-header">External — Firestore</div>
+          <div class="layer-body">
+            <div class="module module-red">
+              <div class="module-name">firebase-admin/firestore</div>
+              <div class="module-detail">
+                <code>conversations/{id}</code><br>
+                <code>conversations/{id}/messages/{id}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <p style="margin-top:8px;font-size:11px;color:#94a3b8;">↓ = request flow &nbsp;·&nbsp; parallel columns = independent subsystems used by routes</p>
+
+  <!-- Auth Middleware -->
+  <h2>Auth Middleware — Request flow</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="flow-row"><span class="flow-label badge-fail">REJECT 401</span><span>No <code>Authorization</code> header or token is empty</span></div>
+      <div class="flow-row"><span class="flow-label badge-fail">REJECT 401</span><span><code>getAuth().verifyIdToken(token)</code> throws (expired / tampered / wrong project)</span></div>
+      <div class="flow-row"><span class="flow-label badge-fail">REJECT 401</span><span><code>decoded.email</code> is undefined (phone auth / anonymous user)</span></div>
+      <div class="flow-row"><span class="flow-label badge-fail">REJECT 401</span><span><code>decoded.email !== process.env.ALLOWED_EMAIL</code></span></div>
+      <div class="flow-row"><span class="flow-label badge-pass">PASS ✓</span><span>Set <code>req.uid = decoded.uid</code> → all Firestore queries scoped to this uid</span></div>
+    </div>
+  </div>
+
+  <!-- API Contract -->
+  <h2>API Contract <span style="font-weight:400;font-size:13px;color:#64748b;">— All require <code>Authorization: Bearer &lt;Firebase ID token&gt;</code></span></h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Method + Endpoint</th><th>Body</th><th>Success Response</th><th>Errors</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-post">POST</span> <code>/api/conversations</code></td><td><code>{message}</code></td><td><code>{conversationId, title, assistantMessage}</code></td><td style="color:#94a3b8;font-size:11px;">400 · 401 · 500</td></tr>
+        <tr><td><span class="badge badge-post">POST</span> <code>/api/conversations/:id/messages</code></td><td><code>{message}</code></td><td><code>{assistantMessage}</code></td><td style="color:#94a3b8;font-size:11px;">400 · 401 · 404 · 500</td></tr>
+        <tr><td><span class="badge badge-get">GET</span> <code>/api/conversations</code></td><td style="color:#94a3b8;">—</td><td><code>[{id, title, lastMessage, updatedAt}]</code></td><td style="color:#94a3b8;font-size:11px;">401 · 500</td></tr>
+        <tr><td><span class="badge badge-get">GET</span> <code>/api/conversations/:id/messages</code></td><td style="color:#94a3b8;">—</td><td><code>[{role, content, createdAt}]</code></td><td style="color:#94a3b8;font-size:11px;">401 · 404 · 500</td></tr>
+        <tr><td><span class="badge badge-delete">DELETE</span> <code>/api/conversations/:id</code></td><td style="color:#94a3b8;">—</td><td style="color:#94a3b8;font-size:11px;">204 No Content</td><td style="color:#94a3b8;font-size:11px;">401 · 404 · 500</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Firestore Schema -->
+  <h2>Firestore Schema</h2>
+  <div class="grid-2">
+    <div class="card card-purple">
+      <div style="font-family:monospace;font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:10px;">conversations/{conversationId}</div>
+      <table>
+        <tr><td style="font-family:monospace;color:#7c3aed;width:40%;">uid</td><td style="color:#555;font-size:12px;">string · owner's Firebase uid</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">title</td><td style="color:#555;font-size:12px;">string · first 40 chars of first message</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">lastMessage</td><td style="color:#555;font-size:12px;">string · latest assistant reply (preview)</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">createdAt</td><td style="color:#555;font-size:12px;">Timestamp</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">updatedAt</td><td style="color:#555;font-size:12px;">Timestamp · ordered desc in list</td></tr>
+      </table>
+    </div>
+    <div class="card card-purple">
+      <div style="font-family:monospace;font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:10px;">…/messages/{messageId}</div>
+      <table>
+        <tr><td style="font-family:monospace;color:#7c3aed;width:40%;">role</td><td style="color:#555;font-size:12px;">"user" | "assistant"</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">content</td><td style="color:#555;font-size:12px;">string · message text</td></tr>
+        <tr><td style="font-family:monospace;color:#7c3aed;">createdAt</td><td style="color:#555;font-size:12px;">Timestamp · ordered asc for Gemini context</td></tr>
+      </table>
+      <p style="margin-top:10px;font-size:11px;color:#94a3b8;">Subcollection — conversation list never fetches message bodies until conversation is opened</p>
+    </div>
+  </div>
+
+  <!-- Environment Variables -->
+  <h2>Environment Variables (Cloud Run)</h2>
+  <div class="card card-green">
+    <table>
+      <tr><td style="font-family:monospace;color:#166534;width:35%;">ALLOWED_EMAIL</td><td>Owner's Google account email — never hardcoded</td></tr>
+      <tr><td style="font-family:monospace;color:#166534;">GEMINI_API_KEY</td><td>From Google AI Studio · never sent to browser</td></tr>
+      <tr><td style="font-family:monospace;color:#166534;">FIREBASE_PROJECT_ID</td><td>Firebase project ID</td></tr>
+      <tr><td style="font-family:monospace;color:#166534;">FRONTEND_URL</td><td>CORS allowed origin (Firebase Hosting URL)</td></tr>
+      <tr><td style="font-family:monospace;color:#166534;">PORT</td><td>Cloud Run injects this automatically (default 8080)</td></tr>
+    </table>
+  </div>
+
+  <!-- Tests -->
+  <h2>Tests — 17 total, all passing ✅</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>File</th><th style="text-align:center;width:60px;">#</th><th>Cases</th></tr></thead>
+      <tbody>
+        <tr><td><code>middleware/auth.test.ts</code></td><td style="text-align:center;font-weight:700;">5</td><td style="font-size:12px;color:#555;">Missing token · invalid token · wrong email · no email claim · valid token sets uid</td></tr>
+        <tr><td><code>providers/GeminiProvider.test.ts</code></td><td style="text-align:center;font-weight:700;">2</td><td style="font-size:12px;color:#555;">Returns response text · assistant→model role mapping in history</td></tr>
+        <tr><td><code>routes/conversations.test.ts</code></td><td style="text-align:center;font-weight:700;">10</td><td style="font-size:12px;color:#555;">All 5 endpoints · 400/404 error cases · title truncation at 40 chars</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
