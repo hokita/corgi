@@ -173,7 +173,7 @@
           <div class="module-name">middleware/auth.ts — <code>authMiddleware</code></div>
           <div class="module-detail">
             Extract <code>Bearer &lt;token&gt;</code> → <code>getAuth().verifyIdToken(token)</code><br>
-            Guard <code>decoded.email</code> → check <code>ALLOWED_EMAIL</code><br>
+            Guard: <code>decoded.email</code> must equal <code>ALLOWED_EMAIL</code> (undefined email also rejected)<br>
             Set <code>req.uid = decoded.uid</code> · reject 401 on any failure
           </div>
         </div>
