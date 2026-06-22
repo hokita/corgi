@@ -23,6 +23,18 @@ function mockResponse(body: unknown, status = 200) {
   })
 }
 
+function mockStreamResponse(events: object[]) {
+  const encoder = new TextEncoder()
+  const lines = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('')
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(lines))
+      controller.close()
+    },
+  })
+  mockFetch.mockResolvedValue({ ok: true, status: 200, body: stream })
+}
+
 describe('api.listConversations', () => {
   it('sends GET /api/conversations with Authorization header', async () => {
     mockResponse([{ id: 'c1', title: 'Test', lastMessage: 'hi', updatedAt: '' }])
@@ -39,29 +51,62 @@ describe('api.listConversations', () => {
 })
 
 describe('api.createConversation', () => {
-  it('sends POST /api/conversations with message body', async () => {
-    mockResponse({ conversationId: 'c1', title: 'Hi', assistantMessage: 'Hello' })
-    const result = await api.createConversation('Hi')
+  it('calls onMeta, onChunk for each chunk, and onDone', async () => {
+    mockStreamResponse([
+      { type: 'meta', conversationId: 'c1', title: 'Hello' },
+      { type: 'chunk', text: 'Hi ' },
+      { type: 'chunk', text: 'there' },
+      { type: 'done' },
+    ])
+    const onMeta = vi.fn()
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.createConversation('Hello', { onMeta, onChunk, onDone, onError })
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/conversations'),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ message: 'Hi' }),
+        body: JSON.stringify({ message: 'Hello' }),
       })
     )
-    expect(result.conversationId).toBe('c1')
+    expect(onMeta).toHaveBeenCalledWith({ conversationId: 'c1', title: 'Hello' })
+    expect(onChunk).toHaveBeenNthCalledWith(1, 'Hi ')
+    expect(onChunk).toHaveBeenNthCalledWith(2, 'there')
+    expect(onDone).toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
   })
 })
 
 describe('api.sendMessage', () => {
-  it('sends POST /api/conversations/:id/messages', async () => {
-    mockResponse({ assistantMessage: 'reply' })
-    const result = await api.sendMessage('c1', 'Follow up')
+  it('calls onChunk for each chunk and onDone', async () => {
+    mockStreamResponse([
+      { type: 'chunk', text: 'Hello' },
+      { type: 'chunk', text: ' world' },
+      { type: 'done' },
+    ])
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.sendMessage('c1', 'Follow up', { onChunk, onDone, onError })
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/conversations/c1/messages'),
       expect.objectContaining({ method: 'POST' })
     )
-    expect(result.assistantMessage).toBe('reply')
+    expect(onChunk).toHaveBeenNthCalledWith(1, 'Hello')
+    expect(onChunk).toHaveBeenNthCalledWith(2, ' world')
+    expect(onDone).toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('calls onError when error event received', async () => {
+    mockStreamResponse([{ type: 'error', message: 'Internal server error' }])
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.sendMessage('c1', 'Follow up', { onChunk, onDone, onError })
+    expect(onError).toHaveBeenCalledWith('Internal server error')
+    expect(onDone).not.toHaveBeenCalled()
   })
 })
 
