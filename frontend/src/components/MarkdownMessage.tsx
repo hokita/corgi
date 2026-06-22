@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import type { Components } from 'react-markdown'
 
 const components: Components = {
@@ -30,7 +31,11 @@ const components: Components = {
   ),
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
-  table: ({ children }) => <table className="w-full text-xs border-collapse mb-2">{children}</table>,
+  table: ({ children }) => (
+    <div className="overflow-x-auto mb-2">
+      <table className="text-xs border-collapse">{children}</table>
+    </div>
+  ),
   th: ({ children }) => <th className="border border-gray-300 px-2 py-1 font-semibold bg-gray-50">{children}</th>,
   td: ({ children }) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
   hr: () => <hr className="border-gray-300 my-2" />,
@@ -40,7 +45,7 @@ interface Props { content: string }
 
 export default function MarkdownMessage({ content }: Props) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={components}>
       {content}
     </ReactMarkdown>
   )
