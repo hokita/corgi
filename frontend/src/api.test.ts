@@ -75,3 +75,15 @@ describe('api.deleteConversation', () => {
     )
   })
 })
+
+describe('529 overloaded handling', () => {
+  it('throws an overloaded error message on 529 response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 529, json: () => Promise.resolve({}) })
+    await expect(api.sendMessage('c1', 'hi')).rejects.toThrow(/overloaded/i)
+  })
+
+  it('throws a generic error for other non-ok responses', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) })
+    await expect(api.sendMessage('c1', 'hi')).rejects.toThrow('API error: 500')
+  })
+})

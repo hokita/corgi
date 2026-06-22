@@ -35,6 +35,7 @@ vi.mock('../services/firestore', () => ({
 
 import { createConversationsRouter } from './conversations'
 import * as firestoreService from '../services/firestore'
+import { OverloadedError } from '../errors'
 
 const mockAI: AIProvider = { chat: vi.fn().mockResolvedValue('AI reply') }
 
@@ -61,6 +62,13 @@ describe('POST /api/conversations', () => {
   it('returns 400 when message is missing', async () => {
     const res = await request(app).post('/api/conversations').send({})
     expect(res.status).toBe(400)
+  })
+
+  it('returns 529 when AI is overloaded', async () => {
+    vi.mocked(mockAI.chat).mockRejectedValueOnce(new OverloadedError())
+    const res = await request(app).post('/api/conversations').send({ message: 'Hello' })
+    expect(res.status).toBe(529)
+    expect(res.body.error).toMatch(/overloaded/i)
   })
 
   it('truncates title to 40 chars', async () => {
@@ -91,6 +99,15 @@ describe('POST /api/conversations/:id/messages', () => {
   it('returns 400 when message is missing', async () => {
     const res = await request(app).post('/api/conversations/conv123/messages').send({})
     expect(res.status).toBe(400)
+  })
+
+  it('returns 529 when AI is overloaded', async () => {
+    vi.mocked(mockAI.chat).mockRejectedValueOnce(new OverloadedError())
+    const res = await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'hi' })
+    expect(res.status).toBe(529)
+    expect(res.body.error).toMatch(/overloaded/i)
   })
 })
 

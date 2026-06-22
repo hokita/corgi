@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, Message } from './AIProvider'
+import { OverloadedError } from '../errors'
 
 export class GeminiProvider implements AIProvider {
   private model: ReturnType<InstanceType<typeof GoogleGenerativeAI>['getGenerativeModel']>
@@ -16,7 +17,20 @@ export class GeminiProvider implements AIProvider {
         parts: [{ text: m.content }],
       })),
     })
-    const result = await chat.sendMessage(newMessage)
-    return result.response.text()
+    try {
+      const result = await chat.sendMessage(newMessage)
+      return result.response.text()
+    } catch (err) {
+      if (isOverloadedError(err)) throw new OverloadedError()
+      throw err
+    }
   }
+}
+
+function isOverloadedError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  const status = (err as { status?: number }).status
+  if (status === 503) return true
+  const message = (err as { message?: string }).message ?? ''
+  return /overloaded/i.test(message)
 }

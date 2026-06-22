@@ -11,6 +11,7 @@ vi.mock('@google/generative-ai', () => ({
 }))
 
 import { GeminiProvider } from './GeminiProvider'
+import { OverloadedError } from '../errors'
 
 describe('GeminiProvider', () => {
   beforeEach(() => {
@@ -24,6 +25,26 @@ describe('GeminiProvider', () => {
     const provider = new GeminiProvider('fake-key')
     const result = await provider.chat([], 'Hi')
     expect(result).toBe('Hello from Gemini')
+  })
+
+  it('throws OverloadedError when Gemini returns status 503', async () => {
+    const err = Object.assign(new Error('Service Unavailable'), { status: 503 })
+    mockSendMessage.mockRejectedValue(err)
+    const provider = new GeminiProvider('fake-key')
+    await expect(provider.chat([], 'Hi')).rejects.toThrow(OverloadedError)
+  })
+
+  it('throws OverloadedError when Gemini error message contains "overloaded"', async () => {
+    mockSendMessage.mockRejectedValue(new Error('The model is overloaded. Please try again later.'))
+    const provider = new GeminiProvider('fake-key')
+    await expect(provider.chat([], 'Hi')).rejects.toThrow(OverloadedError)
+  })
+
+  it('rethrows non-overloaded errors unchanged', async () => {
+    const err = new Error('Unknown error')
+    mockSendMessage.mockRejectedValue(err)
+    const provider = new GeminiProvider('fake-key')
+    await expect(provider.chat([], 'Hi')).rejects.toBe(err)
   })
 
   it('maps assistant role to "model" when building history', async () => {

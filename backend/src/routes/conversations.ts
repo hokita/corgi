@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { AIProvider } from '../providers/AIProvider'
+import { OverloadedError } from '../errors'
 import type {
   CreateConversationRequest,
   CreateConversationResponse,
@@ -32,6 +33,10 @@ export function createConversationsRouter(ai: AIProvider): Router {
         await db.updateConversationLastMessage(conversationId, assistantMessage)
         res.json({ conversationId, title, assistantMessage })
       } catch (err) {
+        if (err instanceof OverloadedError) {
+          res.status(529).json({ error: err.message })
+          return
+        }
         console.error(err)
         res.status(500).json({ error: 'Internal server error' })
       }
@@ -62,6 +67,10 @@ export function createConversationsRouter(ai: AIProvider): Router {
         await db.updateConversationLastMessage(id, assistantMessage)
         res.json({ assistantMessage })
       } catch (err) {
+        if (err instanceof OverloadedError) {
+          res.status(529).json({ error: err.message })
+          return
+        }
         console.error(err)
         res.status(500).json({ error: 'Internal server error' })
       }
