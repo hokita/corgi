@@ -30,33 +30,79 @@ export default function ChatPage({ user }: Props) {
 
   async function handleSend(text: string) {
     setSending(true)
-    try {
-      const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
-      setMessages((prev) => [...prev, userMsg])
+    const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
+    const placeholder: Message = { role: 'assistant', content: '', createdAt: new Date().toISOString() }
+    setMessages((prev) => [...prev, userMsg, placeholder])
 
+    const appendChunk = (chunk: string) => {
+      setMessages((prev) => {
+        const msgs = [...prev]
+        msgs[msgs.length - 1] = {
+          ...msgs[msgs.length - 1],
+          content: msgs[msgs.length - 1].content + chunk,
+        }
+        return msgs
+      })
+    }
+
+    const onError = () => {
+      setMessages((prev) => prev.slice(0, -1))
+      setSending(false)
+    }
+
+    try {
       if (!activeId) {
-        const { conversationId, title, assistantMessage } = await api.createConversation(text)
-        setMessages((prev) => [...prev, { role: 'assistant', content: assistantMessage, createdAt: new Date().toISOString() }])
-        setActiveId(conversationId)
-        setConversations((prev) => [
-          { id: conversationId, title, lastMessage: assistantMessage, updatedAt: new Date().toISOString() },
-          ...prev,
-        ])
+        let newId = ''
+        let accumulated = ''
+        await api.createConversation(text, {
+          onMeta: ({ conversationId, title }) => {
+            newId = conversationId
+            setActiveId(conversationId)
+            setConversations((prev) => [
+              { id: conversationId, title, lastMessage: '', updatedAt: new Date().toISOString() },
+              ...prev,
+            ])
+          },
+          onChunk: (chunk) => {
+            accumulated += chunk
+            appendChunk(chunk)
+          },
+          onDone: () => {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === newId
+                  ? { ...c, lastMessage: accumulated, updatedAt: new Date().toISOString() }
+                  : c
+              )
+            )
+            setSending(false)
+          },
+          onError,
+        })
       } else {
-        const { assistantMessage } = await api.sendMessage(activeId, text)
-        setMessages((prev) => [...prev, { role: 'assistant', content: assistantMessage, createdAt: new Date().toISOString() }])
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === activeId
-              ? { ...c, lastMessage: assistantMessage, updatedAt: new Date().toISOString() }
-              : c
-          )
-        )
+        const id = activeId
+        let accumulated = ''
+        await api.sendMessage(id, text, {
+          onChunk: (chunk) => {
+            accumulated += chunk
+            appendChunk(chunk)
+          },
+          onDone: () => {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === id
+                  ? { ...c, lastMessage: accumulated, updatedAt: new Date().toISOString() }
+                  : c
+              )
+            )
+            setSending(false)
+          },
+          onError,
+        })
       }
     } catch (e) {
       console.error(e)
-    } finally {
-      setSending(false)
+      onError()
     }
   }
 
