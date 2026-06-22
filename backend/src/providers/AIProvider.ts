@@ -4,5 +4,5 @@ export interface Message {
 }
 
 export interface AIProvider {
-  chat(history: Message[], newMessage: string): Promise<string>
+  chatStream(history: Message[], newMessage: string): AsyncIterable<string>
 }

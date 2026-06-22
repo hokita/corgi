@@ -9,14 +9,17 @@ export class GeminiProvider implements AIProvider {
     this.model = client.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
   }
 
-  async chat(history: Message[], newMessage: string): Promise<string> {
+  async *chatStream(history: Message[], newMessage: string): AsyncIterable<string> {
     const chat = this.model.startChat({
       history: history.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
       })),
     })
-    const result = await chat.sendMessage(newMessage)
-    return result.response.text()
+    const result = await chat.sendMessageStream(newMessage)
+    for await (const chunk of result.stream) {
+      const text = chunk.text()
+      if (text) yield text
+    }
   }
 }
