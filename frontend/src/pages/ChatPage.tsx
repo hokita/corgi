@@ -8,7 +8,9 @@ import MessageList from '../components/MessageList'
 import MessageInput from '../components/MessageInput'
 import HistoryDrawer from '../components/HistoryDrawer'
 
-interface Props { user: User }
+interface Props {
+  user: User
+}
 
 export default function ChatPage({ user }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -31,7 +33,11 @@ export default function ChatPage({ user }: Props) {
   async function handleSend(text: string) {
     setSending(true)
     const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
-    const placeholder: Message = { role: 'assistant', content: '', createdAt: new Date().toISOString() }
+    const placeholder: Message = {
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+    }
     setMessages((prev) => [...prev, userMsg, placeholder])
 
     const appendChunk = (chunk: string) => {

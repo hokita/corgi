@@ -13,10 +13,14 @@ const components: Components = {
   ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
   li: ({ children }) => <li className="mb-0.5">{children}</li>,
   pre: ({ children }) => {
-    const codeEl = React.Children.toArray(children)[0] as React.ReactElement<{ children: React.ReactNode }>
+    const codeEl = React.Children.toArray(children)[0] as React.ReactElement<{
+      children: React.ReactNode
+    }>
     return (
       <pre className="bg-gray-900 rounded-lg p-3 overflow-x-auto mb-2">
-        <code className="text-gray-100 font-mono text-xs">{codeEl?.props?.children ?? children}</code>
+        <code className="text-gray-100 font-mono text-xs">
+          {codeEl?.props?.children ?? children}
+        </code>
       </pre>
     )
   },
@@ -24,10 +28,14 @@ const components: Components = {
     <code className="bg-gray-100 text-rose-600 px-1 rounded font-mono text-xs">{children}</code>
   ),
   blockquote: ({ children }) => (
-    <blockquote className="border-l-2 border-gray-400 pl-3 italic text-gray-600 mb-2">{children}</blockquote>
+    <blockquote className="border-l-2 border-gray-400 pl-3 italic text-gray-600 mb-2">
+      {children}
+    </blockquote>
   ),
   a: ({ children, href }) => (
-    <a href={href} className="underline text-blue-600" target="_blank" rel="noreferrer">{children}</a>
+    <a href={href} className="underline text-blue-600" target="_blank" rel="noreferrer">
+      {children}
+    </a>
   ),
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -36,12 +44,16 @@ const components: Components = {
       <table className="text-xs border-collapse">{children}</table>
     </div>
   ),
-  th: ({ children }) => <th className="border border-gray-300 px-2 py-1 font-semibold bg-gray-50">{children}</th>,
+  th: ({ children }) => (
+    <th className="border border-gray-300 px-2 py-1 font-semibold bg-gray-50">{children}</th>
+  ),
   td: ({ children }) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
   hr: () => <hr className="border-gray-300 my-2" />,
 }
 
-interface Props { content: string }
+interface Props {
+  content: string
+}
 
 export default function MarkdownMessage({ content }: Props) {
   return (

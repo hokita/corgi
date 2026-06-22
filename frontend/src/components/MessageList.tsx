@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 import type { Message } from '../types'
 import MarkdownMessage from './MarkdownMessage'
 
-interface Props { messages: Message[] }
+interface Props {
+  messages: Message[]
+}
 
 export default function MessageList({ messages }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)

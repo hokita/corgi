@@ -24,9 +24,11 @@ vi.mock('../services/firestore', () => ({
     },
   ]),
   addMessage: vi.fn().mockResolvedValue(undefined),
-  getMessages: vi.fn().mockResolvedValue(
-    [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
-  ),
+  getMessages: vi
+    .fn()
+    .mockResolvedValue(
+      [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
+    ),
   updateConversationLastMessage: vi.fn().mockResolvedValue(undefined),
   deleteConversation: vi.fn().mockResolvedValue(undefined),
 }))
@@ -34,7 +36,9 @@ vi.mock('../services/firestore', () => ({
 import { createConversationsRouter } from './conversations'
 import * as firestoreService from '../services/firestore'
 
-async function* defaultStream() { yield 'AI reply' }
+async function* defaultStream() {
+  yield 'AI reply'
+}
 
 const mockAI: AIProvider = {
   chatStream: vi.fn().mockReturnValue(defaultStream()),
@@ -63,7 +67,10 @@ function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }>
 
 describe('POST /api/conversations', () => {
   it('streams meta, chunk, and done events', async () => {
-    async function* stream() { yield 'Hello'; yield ' world' }
+    async function* stream() {
+      yield 'Hello'
+      yield ' world'
+    }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     const res = await request(app)
       .post('/api/conversations')
@@ -93,19 +100,21 @@ describe('POST /api/conversations', () => {
   })
 
   it('saves full accumulated assistant message to Firestore', async () => {
-    async function* stream() { yield 'Hello'; yield ' world' }
+    async function* stream() {
+      yield 'Hello'
+      yield ' world'
+    }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
-    await request(app)
-      .post('/api/conversations')
-      .send({ message: 'Hi' })
-      .buffer(true)
+    await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
     expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world')
   })
 })
 
 describe('POST /api/conversations/:id/messages', () => {
   it('streams chunk and done events', async () => {
-    async function* stream() { yield 'AI reply' }
+    async function* stream() {
+      yield 'AI reply'
+    }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
@@ -134,7 +143,10 @@ describe('POST /api/conversations/:id/messages', () => {
   })
 
   it('saves full accumulated assistant message to Firestore', async () => {
-    async function* stream() { yield 'Hello'; yield ' world' }
+    async function* stream() {
+      yield 'Hello'
+      yield ' world'
+    }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     await request(app)
       .post('/api/conversations/conv123/messages')

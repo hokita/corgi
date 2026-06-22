@@ -18,14 +18,26 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-export default function HistoryDrawer({ conversations, activeId, onSelect, onDelete, onNewChat, onClose }: Props) {
+export default function HistoryDrawer({
+  conversations,
+  activeId,
+  onSelect,
+  onDelete,
+  onNewChat,
+  onClose,
+}: Props) {
   return (
     <>
       <div onClick={onClose} className="fixed inset-0 bg-black/40 z-10" />
       <div className="fixed top-0 left-0 bottom-0 w-[280px] bg-white z-[11] flex flex-col shadow-[2px_0_8px_rgba(0,0,0,0.15)]">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <span className="font-bold">Conversations</span>
-          <button onClick={onClose} className="bg-transparent border-none text-xl cursor-pointer leading-none">✕</button>
+          <button
+            onClick={onClose}
+            className="bg-transparent border-none text-xl cursor-pointer leading-none"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -39,11 +51,16 @@ export default function HistoryDrawer({ conversations, activeId, onSelect, onDel
               className={`flex items-center px-4 py-3 border-b border-gray-100 cursor-pointer ${c.id === activeId ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
             >
               <div className="flex-1 min-w-0">
-                <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{c.title}</div>
+                <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+                  {c.title}
+                </div>
                 <div className="text-xs text-gray-400 mt-0.5">{relativeTime(c.updatedAt)}</div>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); onDelete(c.id) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(c.id)
+                }}
                 className="bg-transparent border-none text-gray-300 text-base cursor-pointer p-1 ml-2 shrink-0 hover:text-red-400"
               >
                 🗑

@@ -33,16 +33,20 @@ describe('GeminiProvider', () => {
   })
 
   it('maps assistant role to "model" when building history', async () => {
-    async function* fakeStream() { yield { text: () => 'reply' } }
+    async function* fakeStream() {
+      yield { text: () => 'reply' }
+    }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
-    await collectStream(provider.chatStream(
-      [
-        { role: 'user', content: 'first message' },
-        { role: 'assistant', content: 'first reply' },
-      ],
-      'second message'
-    ))
+    await collectStream(
+      provider.chatStream(
+        [
+          { role: 'user', content: 'first message' },
+          { role: 'assistant', content: 'first reply' },
+        ],
+        'second message'
+      )
+    )
     expect(mockStartChat).toHaveBeenCalledWith({
       history: [
         { role: 'user', parts: [{ text: 'first message' }] },
