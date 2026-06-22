@@ -3,19 +3,9 @@ export interface CreateConversationRequest {
   message: string
 }
 
-export interface CreateConversationResponse {
-  conversationId: string
-  title: string
-  assistantMessage: string
-}
-
 // POST /api/conversations/:id/messages
 export interface SendMessageRequest {
   message: string
-}
-
-export interface SendMessageResponse {
-  assistantMessage: string
 }
 
 // GET /api/conversations
@@ -33,7 +23,14 @@ export interface MessageResponse {
   createdAt: string
 }
 
-// Error response (all endpoints)
+// SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
+export type SSEEvent =
+  | { type: 'meta'; conversationId: string; title: string }
+  | { type: 'chunk'; text: string }
+  | { type: 'done' }
+  | { type: 'error'; message: string }
+
+// Error response (all non-SSE endpoints)
 export interface ErrorResponse {
   error: string
 }

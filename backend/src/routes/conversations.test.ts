@@ -24,11 +24,9 @@ vi.mock('../services/firestore', () => ({
     },
   ]),
   addMessage: vi.fn().mockResolvedValue(undefined),
-  getMessages: vi
-    .fn()
-    .mockResolvedValue(
-      [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
-    ),
+  getMessages: vi.fn().mockResolvedValue(
+    [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
+  ),
   updateConversationLastMessage: vi.fn().mockResolvedValue(undefined),
   deleteConversation: vi.fn().mockResolvedValue(undefined),
 }))
@@ -36,7 +34,11 @@ vi.mock('../services/firestore', () => ({
 import { createConversationsRouter } from './conversations'
 import * as firestoreService from '../services/firestore'
 
-const mockAI: AIProvider = { chat: vi.fn().mockResolvedValue('AI reply') }
+async function* defaultStream() { yield 'AI reply' }
+
+const mockAI: AIProvider = {
+  chatStream: vi.fn().mockReturnValue(defaultStream()),
+}
 
 function mockAuth(req: Request, _: Response, next: NextFunction) {
   req.uid = 'u1'
@@ -47,50 +49,98 @@ const app = express()
 app.use(express.json())
 app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI))
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(mockAI.chatStream).mockReturnValue(defaultStream())
+})
+
+function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }> {
+  return text
+    .split('\n')
+    .filter((l) => l.startsWith('data: '))
+    .map((l) => JSON.parse(l.slice(6)))
+}
 
 describe('POST /api/conversations', () => {
-  it('creates conversation and returns assistantMessage', async () => {
-    const res = await request(app).post('/api/conversations').send({ message: 'Hello world' })
+  it('streams meta, chunk, and done events', async () => {
+    async function* stream() { yield 'Hello'; yield ' world' }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Hello world' })
+      .buffer(true)
     expect(res.status).toBe(200)
-    expect(res.body.conversationId).toBe('conv123')
-    expect(res.body.title).toBe('Hello world')
-    expect(res.body.assistantMessage).toBe('AI reply')
+    expect(res.headers['content-type']).toContain('text/event-stream')
+    const events = parseSSE(res.text)
+    expect(events[0]).toEqual({ type: 'meta', conversationId: 'conv123', title: 'Hello world' })
+    expect(events[1]).toEqual({ type: 'chunk', text: 'Hello' })
+    expect(events[2]).toEqual({ type: 'chunk', text: ' world' })
+    expect(events[3]).toEqual({ type: 'done' })
   })
 
-  it('returns 400 when message is missing', async () => {
+  it('returns 400 JSON when message is missing', async () => {
     const res = await request(app).post('/api/conversations').send({})
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe('message is required')
   })
 
   it('truncates title to 40 chars', async () => {
     await request(app)
       .post('/api/conversations')
       .send({ message: 'A'.repeat(60) })
+      .buffer(true)
     expect(firestoreService.createConversation).toHaveBeenCalledWith('u1', 'A'.repeat(40))
+  })
+
+  it('saves full accumulated assistant message to Firestore', async () => {
+    async function* stream() { yield 'Hello'; yield ' world' }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Hi' })
+      .buffer(true)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world')
   })
 })
 
 describe('POST /api/conversations/:id/messages', () => {
-  it('returns assistantMessage', async () => {
+  it('streams chunk and done events', async () => {
+    async function* stream() { yield 'AI reply' }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
+      .buffer(true)
     expect(res.status).toBe(200)
-    expect(res.body.assistantMessage).toBe('AI reply')
+    expect(res.headers['content-type']).toContain('text/event-stream')
+    const events = parseSSE(res.text)
+    expect(events[0]).toEqual({ type: 'chunk', text: 'AI reply' })
+    expect(events[1]).toEqual({ type: 'done' })
   })
 
-  it('returns 404 when conversation not found', async () => {
+  it('returns 404 JSON when conversation not found', async () => {
     vi.mocked(firestoreService.getConversation).mockResolvedValueOnce(null)
     const res = await request(app)
       .post('/api/conversations/missing/messages')
       .send({ message: 'hi' })
     expect(res.status).toBe(404)
+    expect(res.body.error).toBe('Conversation not found')
   })
 
-  it('returns 400 when message is missing', async () => {
+  it('returns 400 JSON when message is missing', async () => {
     const res = await request(app).post('/api/conversations/conv123/messages').send({})
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe('message is required')
+  })
+
+  it('saves full accumulated assistant message to Firestore', async () => {
+    async function* stream() { yield 'Hello'; yield ' world' }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'Follow up' })
+      .buffer(true)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world')
   })
 })
 
