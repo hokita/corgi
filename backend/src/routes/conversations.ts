@@ -17,7 +17,7 @@ function writeSSE(res: import('express').Response, event: SSEEvent) {
 export function createConversationsRouter(ai: AIProvider): Router {
   const router = Router()
 
-  router.post<Record<string, never>, never, CreateConversationRequest>('/', async (req, res) => {
+  router.post<Record<string, never>, unknown, CreateConversationRequest>('/', async (req, res) => {
     const { message } = req.body
     const uid = req.uid!
     if (!message?.trim()) {
@@ -55,7 +55,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
     }
   })
 
-  router.post<{ id: string }, never, SendMessageRequest>('/:id/messages', async (req, res) => {
+  router.post<{ id: string }, unknown, SendMessageRequest>('/:id/messages', async (req, res) => {
     const { message } = req.body
     const uid = req.uid!
     const { id } = req.params
