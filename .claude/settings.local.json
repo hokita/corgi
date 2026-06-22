@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(node -e ' *)",
+      "Bash(git commit *)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(npx prettier *)",
+      "Bash(npx tsc *)",
+      "Bash(npm list *)",
+      "Bash(/Users/hokita/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/skills/brainstorming/scripts/start-server.sh *)",
+      "Bash(git *)",
+      "Bash(grep -v '^$')",
+      "Bash(grep -oP '\\\\.[a-zA-Z][a-zA-Z0-9_-]*\\(?=\\\\s*[\\\\{,]\\)' /Users/hokita/ghq/github.com/hokita/corgi/docs/backend.html)",
+      "Bash(python3 *)",
+      "Bash(awk NR>=36 && NR<=60 {print NR\": \"$0} *)",
+      "Bash(awk '/<style>/,/<\\\\/style>/' /Users/hokita/ghq/github.com/hokita/corgi/docs/frontend.html)",
+      "Bash(gcloud logging read *)",
+      "Bash(gcloud run revisions describe *)",
+      "Bash(gcloud run services list *)",
+      "Bash(curl -s https://hello-test-838648453884.asia-northeast1.run.app/)",
+      "Bash(gcloud run *)",
+      "Bash(curl -s https://corgi-backend-838648453884.asia-northeast1.run.app/healthz)",
+      "Bash(xargs ls)",
+      "Bash(xargs cat)",
+      "Read(//Users/hokita/.claude/**)",
+      "Read(//Users/hokita/.claude/plugins/cache/claude-plugins-official/superpowers/6.0.2/skills/using-superpowers/references/**)"
+    ]
+  }
+}
