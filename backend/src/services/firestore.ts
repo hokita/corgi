@@ -13,6 +13,7 @@ export interface FirestoreMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  suggestions?: string[]
 }
 
 export async function createConversation(uid: string, title: string): Promise<string> {
@@ -50,14 +51,17 @@ export async function listConversations(uid: string): Promise<ConversationDoc[]>
 export async function addMessage(
   conversationId: string,
   role: 'user' | 'assistant',
-  content: string
+  content: string,
+  suggestions?: string[]
 ): Promise<void> {
   const db = getFirestore()
+  const data: Record<string, unknown> = { role, content, createdAt: Timestamp.now() }
+  if (suggestions && suggestions.length > 0) data.suggestions = suggestions
   await db
     .collection('conversations')
     .doc(conversationId)
     .collection('messages')
-    .add({ role, content, createdAt: Timestamp.now() })
+    .add(data)
 }
 
 export async function getMessages(conversationId: string): Promise<FirestoreMessage[]> {
@@ -68,11 +72,16 @@ export async function getMessages(conversationId: string): Promise<FirestoreMess
     .collection('messages')
     .orderBy('createdAt', 'asc')
     .get()
-  return snap.docs.map((d) => ({
-    role: d.data().role as 'user' | 'assistant',
-    content: d.data().content as string,
-    createdAt: (d.data().createdAt as Timestamp).toDate().toISOString(),
-  }))
+  return snap.docs.map((d) => {
+    const data = d.data()
+    const msg: FirestoreMessage = {
+      role: data.role as 'user' | 'assistant',
+      content: data.content as string,
+      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+    }
+    if (Array.isArray(data.suggestions)) msg.suggestions = data.suggestions as string[]
+    return msg
+  })
 }
 
 export async function updateConversationLastMessage(

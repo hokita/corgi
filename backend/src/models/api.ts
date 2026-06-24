@@ -21,12 +21,14 @@ export interface MessageResponse {
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  suggestions?: string[]
 }
 
 // SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
 export type SSEEvent =
   | { type: 'meta'; conversationId: string; title: string }
   | { type: 'chunk'; text: string }
+  | { type: 'suggestions'; items: string[] }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
