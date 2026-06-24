@@ -13,6 +13,13 @@ export default function MessageInput({ onSend, disabled }: Props) {
     if (!disabled) textareaRef.current?.focus()
   }, [disabled])
 
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
+
   function handleKeyDown(e: React.KeyboardEvent) {
     const isMobile = navigator.maxTouchPoints > 0
     if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
@@ -38,7 +45,7 @@ export default function MessageInput({ onSend, disabled }: Props) {
         disabled={disabled}
         placeholder="Message..."
         rows={1}
-        className="flex-1 resize-none border border-gray-200 rounded-[20px] px-3.5 py-2.5 text-base outline-none font-[inherit] disabled:opacity-50"
+        className="flex-1 resize-none border border-gray-200 rounded-[20px] px-3.5 py-2.5 text-base outline-none font-[inherit] disabled:opacity-50 overflow-y-hidden max-h-40"
       />
       <button
         onClick={handleSend}
