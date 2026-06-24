@@ -14,7 +14,8 @@ export default function MessageInput({ onSend, disabled }: Props) {
   }, [disabled])
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const isMobile = navigator.maxTouchPoints > 0
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault()
       handleSend()
     }
