@@ -36,13 +36,17 @@ export function createConversationsRouter(ai: AIProvider): Router {
       writeSSE(res, { type: 'meta', conversationId, title })
 
       let fullText = ''
-      for await (const chunk of ai.chatStream([], message)) {
-        if (typeof chunk === 'string') {
-          fullText += chunk
-          writeSSE(res, { type: 'chunk', text: chunk })
+      let suggestions: string[] | undefined
+      for await (const item of ai.chatStream([], message)) {
+        if (typeof item === 'string') {
+          fullText += item
+          writeSSE(res, { type: 'chunk', text: item })
+        } else {
+          suggestions = item.items
+          writeSSE(res, { type: 'suggestions', items: item.items })
         }
       }
-      await db.addMessage(conversationId, 'assistant', fullText)
+      await db.addMessage(conversationId, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(conversationId, fullText)
       writeSSE(res, { type: 'done' })
     } catch (err) {
@@ -80,13 +84,17 @@ export function createConversationsRouter(ai: AIProvider): Router {
       res.setHeader('Connection', 'keep-alive')
 
       let fullText = ''
-      for await (const chunk of ai.chatStream(aiHistory, message)) {
-        if (typeof chunk === 'string') {
-          fullText += chunk
-          writeSSE(res, { type: 'chunk', text: chunk })
+      let suggestions: string[] | undefined
+      for await (const item of ai.chatStream(aiHistory, message)) {
+        if (typeof item === 'string') {
+          fullText += item
+          writeSSE(res, { type: 'chunk', text: item })
+        } else {
+          suggestions = item.items
+          writeSSE(res, { type: 'suggestions', items: item.items })
         }
       }
-      await db.addMessage(id, 'assistant', fullText)
+      await db.addMessage(id, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(id, fullText)
       writeSSE(res, { type: 'done' })
     } catch (err) {

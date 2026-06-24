@@ -3,6 +3,7 @@ import request from 'supertest'
 import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
 import type { AIProvider } from '../providers/AIProvider'
+import type { StreamItem } from '../providers/AIProvider'
 
 vi.mock('../services/firestore', () => ({
   createConversation: vi.fn().mockResolvedValue('conv123'),
@@ -106,7 +107,36 @@ describe('POST /api/conversations', () => {
     }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world')
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
+  })
+
+  it('emits suggestions SSE event when AI yields suggestions', async () => {
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Here are your options:'
+      yield { type: 'suggestions', items: ['Yes', 'No'] }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Give me options' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({ type: 'suggestions', items: ['Yes', 'No'] })
+  })
+
+  it('saves suggestions to Firestore with assistant message', async () => {
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Choose:'
+      yield { type: 'suggestions', items: ['Yes', 'No'] }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Give me options' })
+      .buffer(true)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith(
+      'conv123', 'assistant', 'Choose:', ['Yes', 'No']
+    )
   })
 })
 
@@ -152,7 +182,36 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
       .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world')
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
+  })
+
+  it('emits suggestions SSE event when AI yields suggestions', async () => {
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Pick one:'
+      yield { type: 'suggestions', items: ['Option A', 'Option B'] }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    const res = await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'Give me options' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({ type: 'suggestions', items: ['Option A', 'Option B'] })
+  })
+
+  it('saves suggestions to Firestore with assistant message', async () => {
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Choose:'
+      yield { type: 'suggestions', items: ['Option A', 'Option B'] }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'Give me options' })
+      .buffer(true)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith(
+      'conv123', 'assistant', 'Choose:', ['Option A', 'Option B']
+    )
   })
 })
 
