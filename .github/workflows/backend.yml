@@ -48,8 +48,20 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          gcloud builds submit backend/ \
-            --tag asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest
+          BUILD_ID=$(gcloud builds submit backend/ \
+            --tag asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest \
+            --async \
+            --format='value(id)')
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)')
+            echo "Status: $STATUS"
+            if [ "$STATUS" = "SUCCESS" ]; then break; fi
+            if [[ "$STATUS" =~ ^(FAILURE|TIMEOUT|CANCELLED|INTERNAL_ERROR)$ ]]; then
+              echo "Build failed: $STATUS"; exit 1
+            fi
+            sleep 15
+          done
 
       - name: Deploy to Cloud Run
         run: |
