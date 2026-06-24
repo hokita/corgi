@@ -1,0 +1,46 @@
+steps:
+  - name: 'node:24'
+    entrypoint: 'npm'
+    args: ['ci']
+    dir: 'backend'
+
+  - name: 'node:24'
+    entrypoint: 'npm'
+    args: ['run', 'lint']
+    dir: 'backend'
+
+  - name: 'node:24'
+    entrypoint: 'npm'
+    args: ['test']
+    dir: 'backend'
+
+  - name: 'node:24'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+    dir: 'backend'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest'
+      - 'backend/'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - 'gcloud'
+      - 'run'
+      - 'deploy'
+      - 'corgi-backend'
+      - '--image=asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest'
+      - '--region=asia-northeast1'
+      - '--allow-unauthenticated'
+      - '--min-instances=0'
+      - '--max-instances=2'
+      - '--set-env-vars=FIREBASE_PROJECT_ID=corgi-8732c,FRONTEND_URL=https://corgi-8732c.web.app'
+      - '--set-secrets=ALLOWED_EMAIL=ALLOWED_EMAIL:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest'
