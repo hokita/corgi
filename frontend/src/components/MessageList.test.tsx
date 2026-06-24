@@ -57,7 +57,7 @@ describe('MessageList', () => {
         onSuggestionClick={() => {}}
       />
     )
-    expect(screen.getByText('Yes').closest('button')!.className).toContain('bg-[#0084ff]')
+    expect(screen.getByRole('button', { name: 'Yes' }).className).toContain('bg-[#0084ff]')
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
   })
 
