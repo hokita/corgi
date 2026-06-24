@@ -28,7 +28,7 @@ export class GeminiProvider implements AIProvider {
   constructor(apiKey: string) {
     const client = new GoogleGenerativeAI(apiKey)
     this.model = client.getGenerativeModel({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash',
       systemInstruction:
         'You are a helpful assistant. When it would help the user to choose a next step, call the suggest_options function at the end of your response with 2 to 4 short button labels.',
     })
