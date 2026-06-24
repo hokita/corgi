@@ -51,6 +51,14 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
+    const onSuggestions = (items: string[]) => {
+      setMessages((prev) => {
+        const msgs = [...prev]
+        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], suggestions: items }
+        return msgs
+      })
+    }
+
     const onError = () => {
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
@@ -73,6 +81,7 @@ export default function ChatPage({ user }: Props) {
             accumulated += chunk
             appendChunk(chunk)
           },
+          onSuggestions,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>
@@ -93,6 +102,7 @@ export default function ChatPage({ user }: Props) {
             accumulated += chunk
             appendChunk(chunk)
           },
+          onSuggestions,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>
@@ -151,7 +161,7 @@ export default function ChatPage({ user }: Props) {
           Start a conversation
         </div>
       ) : (
-        <MessageList messages={messages} />
+        <MessageList messages={messages} onSuggestionClick={handleSend} />
       )}
 
       <MessageInput onSend={handleSend} disabled={sending} />
