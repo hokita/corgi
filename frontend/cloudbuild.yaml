@@ -1,3 +1,4 @@
+# Triggered by: push to main, path filter frontend/** (configured in Cloud Build trigger)
 steps:
   - name: 'node:24'
     entrypoint: 'npm'
@@ -19,6 +20,8 @@ steps:
     args: ['run', 'build']
     dir: 'frontend'
     env:
+      # Firebase config is intentionally hardcoded — it is public-facing client configuration,
+      # not a secret. Security is enforced by Firebase Security Rules.
       - 'VITE_FIREBASE_API_KEY=AIzaSyCwAA7MJGTsn6wNMsJrPwSj_Lt3d4Sx2Ho'
       - 'VITE_FIREBASE_AUTH_DOMAIN=corgi-8732c.firebaseapp.com'
       - 'VITE_FIREBASE_PROJECT_ID=corgi-8732c'
