@@ -21,6 +21,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export interface StreamCallbacks {
   onMeta?: (meta: { conversationId: string; title: string }) => void
   onChunk: (text: string) => void
+  onSuggestions?: (items: string[]) => void
   onDone: () => void
   onError: (message: string) => void
 }
@@ -59,10 +60,12 @@ async function streamRequest(
         conversationId?: string
         title?: string
         message?: string
+        items?: string[]
       }
       if (event.type === 'chunk') callbacks.onChunk(event.text!)
       else if (event.type === 'meta')
         callbacks.onMeta?.({ conversationId: event.conversationId!, title: event.title! })
+      else if (event.type === 'suggestions') callbacks.onSuggestions?.(event.items!)
       else if (event.type === 'done') callbacks.onDone()
       else if (event.type === 'error') callbacks.onError(event.message!)
     }
