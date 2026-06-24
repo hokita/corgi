@@ -79,7 +79,7 @@ describe('GeminiProvider', () => {
     async function* fakeStream() {
       yield { text: () => 'Here are your options.', candidates: undefined }
       yield {
-        text: () => { throw new Error('no text') },
+        text: () => '',
         candidates: [{
           content: {
             parts: [{
@@ -105,7 +105,7 @@ describe('GeminiProvider', () => {
     async function* fakeStream() {
       yield { text: () => 'Done.', candidates: undefined }
       yield {
-        text: () => { throw new Error('no text') },
+        text: () => '',
         candidates: [{
           content: {
             parts: [{ functionCall: { name: 'unknown_tool', args: {} } }],

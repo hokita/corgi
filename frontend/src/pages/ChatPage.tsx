@@ -31,6 +31,7 @@ export default function ChatPage({ user }: Props) {
   }, [])
 
   async function handleSend(text: string) {
+    if (sending) return
     setSending(true)
     const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
     const placeholder: Message = {

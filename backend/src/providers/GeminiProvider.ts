@@ -44,25 +44,24 @@ export class GeminiProvider implements AIProvider {
     })
     const result = await chat.sendMessageStream(newMessage)
     for await (const chunk of result.stream) {
-      try {
-        const text = chunk.text()
-        if (text) yield text
-      } catch {
-        // chunk contains no text (e.g. a function call part)
-      }
-
+      let hasFunctionCall = false
       for (const candidate of chunk.candidates ?? []) {
         for (const part of candidate.content?.parts ?? []) {
           if (
             'functionCall' in part &&
             part.functionCall?.name === 'suggest_options'
           ) {
+            hasFunctionCall = true
             const args = part.functionCall.args as { items?: string[] }
             if (Array.isArray(args?.items) && args.items.length > 0) {
               yield { type: 'suggestions', items: args.items }
             }
           }
         }
+      }
+      if (!hasFunctionCall) {
+        const text = chunk.text()
+        if (text) yield text
       }
     }
   }
