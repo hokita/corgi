@@ -137,7 +137,7 @@ Add three repository secrets:
 |---|---|
 | `WIF_PROVIDER` | The `projects/…/providers/github-provider` string from step 7 |
 | `WIF_SERVICE_ACCOUNT` | `github-actions-deploy@corgi-8732c.iam.gserviceaccount.com` |
-| `ALLOWED_EMAIL` | Your Google account email (e.g. `hideee.0202@gmail.com`) |
+| `ALLOWED_EMAIL` | Your Google account email |
 
 ---
 
