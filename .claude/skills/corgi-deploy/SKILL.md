@@ -44,12 +44,18 @@ echo -n "NEW_KEY" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
 ## Backend → Cloud Run
 
 ```bash
-# 1. Build & push image
+# 1. Pre-deployment checks
 cd backend
+npm run lint        # must pass with no errors
+npm run format      # auto-fixes formatting
+npm run build       # tsc — must compile cleanly
+npm audit           # review vulnerabilities; fix if actionable
+
+# 2. Build & push image
 gcloud builds submit \
   --tag asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest
 
-# 2. Deploy
+# 3. Deploy
 gcloud run deploy corgi-backend \
   --image asia-northeast1-docker.pkg.dev/corgi-8732c/corgi/backend:latest \
   --region asia-northeast1 \
@@ -59,7 +65,7 @@ gcloud run deploy corgi-backend \
   --set-env-vars "ALLOWED_EMAIL=YOUR_EMAIL,FIREBASE_PROJECT_ID=corgi-8732c,FRONTEND_URL=https://corgi-8732c.web.app" \
   --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest"
 
-# 3. Verify
+# 4. Verify
 curl https://YOUR_CLOUD_RUN_URL/health
 # Expected: {"ok":true}
 ```
@@ -70,17 +76,16 @@ Replace `YOUR_EMAIL` with your Google account email.
 
 ## Frontend → Firebase Hosting
 
-Firebase CLI login doesn't work locally — use **Google Cloud Shell** (pre-authenticated).
-
 ```bash
-# Open Cloud Shell at console.firebase.google.com (click >_ icon)
+# 1. Pre-deployment checks
+cd frontend
+npm run lint        # must pass with no errors
+npm run format      # auto-fixes formatting
+npm run build       # tsc + vite — must compile cleanly
+npm audit           # review vulnerabilities; fix if actionable
+cd ..
 
-# Clone or pull latest
-git clone https://github.com/hokita/corgi.git && cd corgi
-# or: cd corgi && git pull
-
-# Build and deploy
-cd frontend && npm install && npm run build && cd ..
+# 2. Deploy
 firebase deploy --only hosting
 # Expected: Hosting URL: https://corgi-8732c.web.app
 ```
