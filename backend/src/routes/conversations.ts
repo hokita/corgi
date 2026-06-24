@@ -37,8 +37,10 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
       let fullText = ''
       for await (const chunk of ai.chatStream([], message)) {
-        fullText += chunk
-        writeSSE(res, { type: 'chunk', text: chunk })
+        if (typeof chunk === 'string') {
+          fullText += chunk
+          writeSSE(res, { type: 'chunk', text: chunk })
+        }
       }
       await db.addMessage(conversationId, 'assistant', fullText)
       await db.updateConversationLastMessage(conversationId, fullText)
@@ -79,8 +81,10 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
       let fullText = ''
       for await (const chunk of ai.chatStream(aiHistory, message)) {
-        fullText += chunk
-        writeSSE(res, { type: 'chunk', text: chunk })
+        if (typeof chunk === 'string') {
+          fullText += chunk
+          writeSSE(res, { type: 'chunk', text: chunk })
+        }
       }
       await db.addMessage(id, 'assistant', fullText)
       await db.updateConversationLastMessage(id, fullText)

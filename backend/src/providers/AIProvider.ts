@@ -3,6 +3,8 @@ export interface Message {
   content: string
 }
 
+export type StreamItem = string | { type: 'suggestions'; items: string[] }
+
 export interface AIProvider {
-  chatStream(history: Message[], newMessage: string): AsyncIterable<string>
+  chatStream(history: Message[], newMessage: string): AsyncIterable<StreamItem>
 }
