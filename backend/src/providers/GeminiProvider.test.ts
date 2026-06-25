@@ -114,7 +114,7 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'search something'))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: expect.arrayContaining([{ googleSearchRetrieval: {} }]),
+        tools: expect.arrayContaining([{ googleSearch: {} }]),
       })
     )
   })

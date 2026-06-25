@@ -40,7 +40,8 @@ export class GeminiProvider implements AIProvider {
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
       })),
-      tools: [suggestOptionsTool, { googleSearchRetrieval: {} }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [suggestOptionsTool, { googleSearch: {} } as any],
     })
     const result = await chat.sendMessageStream(newMessage)
     for await (const chunk of result.stream) {
