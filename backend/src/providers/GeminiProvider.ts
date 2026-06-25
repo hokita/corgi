@@ -28,7 +28,7 @@ export class GeminiProvider implements AIProvider {
   constructor(apiKey: string) {
     const client = new GoogleGenerativeAI(apiKey)
     this.model = client.getGenerativeModel({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash',
       systemInstruction:
         'You are a helpful assistant. When it would help the user to choose a next step, call the suggest_options function at the end of your response with 2 to 4 short button labels.',
     })
@@ -47,10 +47,7 @@ export class GeminiProvider implements AIProvider {
       let hasFunctionCall = false
       for (const candidate of chunk.candidates ?? []) {
         for (const part of candidate.content?.parts ?? []) {
-          if (
-            'functionCall' in part &&
-            part.functionCall?.name === 'suggest_options'
-          ) {
+          if ('functionCall' in part && part.functionCall?.name === 'suggest_options') {
             hasFunctionCall = true
             const args = part.functionCall.args as { items?: string[] }
             if (Array.isArray(args?.items) && args.items.length > 0) {
