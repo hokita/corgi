@@ -105,7 +105,35 @@ describe('GeminiProvider', () => {
     ])
   })
 
-  it('includes googleSearch tool in chat tools', async () => {
+  it('includes googleSearch tool when googleSearch option is true', async () => {
+    async function* fakeStream() {
+      yield { text: () => 'result', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key', { googleSearch: true })
+    await collectStream(provider.chatStream([], 'search something'))
+    expect(mockStartChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.arrayContaining([{ googleSearch: {} }]),
+      })
+    )
+  })
+
+  it('excludes googleSearch tool when googleSearch option is false', async () => {
+    async function* fakeStream() {
+      yield { text: () => 'result', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key', { googleSearch: false })
+    await collectStream(provider.chatStream([], 'search something'))
+    expect(mockStartChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.not.arrayContaining([{ googleSearch: {} }]),
+      })
+    )
+  })
+
+  it('excludes googleSearch tool by default', async () => {
     async function* fakeStream() {
       yield { text: () => 'result', candidates: undefined }
     }
@@ -114,7 +142,7 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'search something'))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: expect.arrayContaining([{ googleSearch: {} }]),
+        tools: expect.not.arrayContaining([{ googleSearch: {} }]),
       })
     )
   })

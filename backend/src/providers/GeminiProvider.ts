@@ -22,26 +22,34 @@ const suggestOptionsTool = {
   ],
 }
 
+export interface GeminiProviderOptions {
+  googleSearch?: boolean
+}
+
 export class GeminiProvider implements AIProvider {
   private model: ReturnType<InstanceType<typeof GoogleGenerativeAI>['getGenerativeModel']>
+  private googleSearch: boolean
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, options: GeminiProviderOptions = {}) {
+    this.googleSearch = options.googleSearch ?? false
     const client = new GoogleGenerativeAI(apiKey)
     this.model = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       systemInstruction:
         'You are a helpful assistant. When it would help the user to choose a next step, call the suggest_options function at the end of your response with 2 to 4 short button labels.',
     })
   }
 
   async *chatStream(history: Message[], newMessage: string): AsyncIterable<StreamItem> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools: any[] = [suggestOptionsTool]
+    if (this.googleSearch) tools.push({ googleSearch: {} })
     const chat = this.model.startChat({
       history: history.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
       })),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [suggestOptionsTool, { googleSearch: {} } as any],
+      tools,
     })
     const result = await chat.sendMessageStream(newMessage)
     for await (const chunk of result.stream) {
