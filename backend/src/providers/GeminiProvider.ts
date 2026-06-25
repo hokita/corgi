@@ -31,7 +31,7 @@ export class GeminiProvider implements AIProvider {
   private googleSearch: boolean
 
   constructor(apiKey: string, options: GeminiProviderOptions = {}) {
-    this.googleSearch = options.googleSearch ?? true
+    this.googleSearch = options.googleSearch ?? false
     const client = new GoogleGenerativeAI(apiKey)
     this.model = client.getGenerativeModel({
       model: 'gemini-3.5-flash',
