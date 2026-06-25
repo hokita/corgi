@@ -80,16 +80,20 @@ describe('GeminiProvider', () => {
       yield { text: () => 'Here are your options.', candidates: undefined }
       yield {
         text: () => '',
-        candidates: [{
-          content: {
-            parts: [{
-              functionCall: {
-                name: 'suggest_options',
-                args: { items: ['Yes', 'No', 'Maybe'] },
-              },
-            }],
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    name: 'suggest_options',
+                    args: { items: ['Yes', 'No', 'Maybe'] },
+                  },
+                },
+              ],
+            },
           },
-        }],
+        ],
       }
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
@@ -101,16 +105,32 @@ describe('GeminiProvider', () => {
     ])
   })
 
+  it('includes googleSearch tool in chat tools', async () => {
+    async function* fakeStream() {
+      yield { text: () => 'result', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'search something'))
+    expect(mockStartChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.arrayContaining([{ googleSearch: {} }]),
+      })
+    )
+  })
+
   it('ignores unknown function calls', async () => {
     async function* fakeStream() {
       yield { text: () => 'Done.', candidates: undefined }
       yield {
         text: () => '',
-        candidates: [{
-          content: {
-            parts: [{ functionCall: { name: 'unknown_tool', args: {} } }],
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'unknown_tool', args: {} } }],
+            },
           },
-        }],
+        ],
       }
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
