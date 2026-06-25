@@ -36,12 +36,12 @@ jobs:
       - name: Build
         working-directory: frontend
         env:
-          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Firebase client config is public-facing — security enforced by Firebase Security Rules, not by keeping keys secret.
+          VITE_FIREBASE_API_KEY: AIzaSyCwAA7MJGTsn6wNMsJrPwSj_Lt3d4Sx2Ho
+          VITE_FIREBASE_AUTH_DOMAIN: corgi-8732c.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: corgi-8732c
+          VITE_API_URL: https://corgi-backend-838648453884.asia-northeast1.run.app
         run: npm run build
-        working-directory: frontend
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
