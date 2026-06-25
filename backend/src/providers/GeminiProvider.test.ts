@@ -133,7 +133,7 @@ describe('GeminiProvider', () => {
     )
   })
 
-  it('excludes googleSearch tool by default', async () => {
+  it('includes googleSearch tool by default', async () => {
     async function* fakeStream() {
       yield { text: () => 'result', candidates: undefined }
     }
@@ -142,7 +142,7 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'search something'))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: expect.not.arrayContaining([{ googleSearch: {} }]),
+        tools: expect.arrayContaining([{ googleSearch: {} }]),
       })
     )
   })
