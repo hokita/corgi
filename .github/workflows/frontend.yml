@@ -58,4 +58,5 @@ jobs:
       - name: Deploy to Firebase Hosting
         run: |
           export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)
-          firebase deploy --only hosting --project corgi-8732c
+          echo "Token length: ${#GOOGLE_OAUTH_ACCESS_TOKEN}"
+          firebase deploy --only hosting --project corgi-8732c --debug 2>&1 | head -60
