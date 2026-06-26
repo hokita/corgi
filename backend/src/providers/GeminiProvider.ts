@@ -50,6 +50,10 @@ export class GeminiProvider implements AIProvider {
         parts: [{ text: m.content }],
       })),
       tools,
+      // Required when mixing built-in tools (googleSearch) with function calling
+      ...(this.googleSearch && {
+        toolConfig: { includeServerSideToolInvocations: true } as never,
+      }),
     })
     const result = await chat.sendMessageStream(newMessage)
     for await (const chunk of result.stream) {
