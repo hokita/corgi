@@ -15,7 +15,7 @@ export function createApp() {
     authMiddleware,
     createConversationsRouter(
       new GeminiProvider(process.env.GEMINI_API_KEY!, {
-        googleSearch: process.env.GOOGLE_SEARCH_ENABLED === 'true',
+        googleSearch: true,
       })
     )
   )
