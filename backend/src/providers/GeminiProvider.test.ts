@@ -166,4 +166,67 @@ describe('GeminiProvider', () => {
     const items = await collectStream(provider.chatStream([], 'Hi'))
     expect(items).toEqual(['Done.'])
   })
+
+  it('yields brainstorm and suggestions items when Gemini calls brainstorm_ideas', async () => {
+    const clusters = [
+      { label: 'Cluster A', ideas: [{ label: 'Idea 1', description: 'Desc 1' }] },
+      { label: 'Cluster B', ideas: [{ label: 'Idea 2', description: 'Desc 2' }] },
+    ]
+    async function* fakeStream() {
+      yield { text: () => 'Here are your ideas.', candidates: undefined }
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'brainstorm_ideas', args: { clusters } } }],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Help me brainstorm'))
+    expect(items).toEqual([
+      'Here are your ideas.',
+      { type: 'brainstorm', clusters },
+      { type: 'suggestions', items: ['Cluster A', 'Cluster B'] },
+    ])
+  })
+
+  it('ignores suggest_options when brainstorm_ideas was already called', async () => {
+    const clusters = [
+      { label: 'Cluster A', ideas: [{ label: 'Idea 1', description: 'Desc 1' }] },
+    ]
+    async function* fakeStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'brainstorm_ideas', args: { clusters } } }],
+            },
+          },
+        ],
+      }
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'suggest_options', args: { items: ['Extra', 'Button'] } } }],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Brainstorm'))
+    expect(items).toEqual([
+      { type: 'brainstorm', clusters },
+      { type: 'suggestions', items: ['Cluster A'] },
+    ])
+  })
 })
