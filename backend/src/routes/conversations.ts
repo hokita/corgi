@@ -41,9 +41,11 @@ export function createConversationsRouter(ai: AIProvider): Router {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
-        } else {
+        } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
+        } else if (item.type === 'brainstorm') {
+          writeSSE(res, { type: 'brainstorm', clusters: item.clusters })
         }
       }
       await db.addMessage(conversationId, 'assistant', fullText, suggestions)
@@ -89,9 +91,11 @@ export function createConversationsRouter(ai: AIProvider): Router {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
-        } else {
+        } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
+        } else if (item.type === 'brainstorm') {
+          writeSSE(res, { type: 'brainstorm', clusters: item.clusters })
         }
       }
       await db.addMessage(id, 'assistant', fullText, suggestions)
