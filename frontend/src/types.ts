@@ -1,3 +1,8 @@
+export interface IdeaCluster {
+  label: string
+  ideas: { label: string; description: string }[]
+}
+
 export interface Conversation {
   id: string
   title: string
@@ -10,4 +15,5 @@ export interface Message {
   content: string
   createdAt: string
   suggestions?: string[]
+  clusters?: IdeaCluster[]
 }

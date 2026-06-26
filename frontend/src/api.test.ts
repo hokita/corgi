@@ -122,3 +122,20 @@ describe('api.deleteConversation', () => {
     )
   })
 })
+
+describe('api brainstorm SSE event', () => {
+  it('calls onBrainstorm when brainstorm event received', async () => {
+    const clusters = [{ label: 'Cluster A', ideas: [{ label: 'Idea', description: 'Desc' }] }]
+    mockStreamResponse([
+      { type: 'brainstorm', clusters },
+      { type: 'done' },
+    ])
+    const onBrainstorm = vi.fn()
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.sendMessage('c1', 'Brainstorm', { onBrainstorm, onChunk, onDone, onError })
+    expect(onBrainstorm).toHaveBeenCalledWith(clusters)
+    expect(onDone).toHaveBeenCalled()
+  })
+})
