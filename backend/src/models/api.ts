@@ -22,6 +22,12 @@ export interface MessageResponse {
   content: string
   createdAt: string
   suggestions?: string[]
+  clusters?: IdeaCluster[]
+}
+
+export interface IdeaCluster {
+  label: string
+  ideas: { label: string; description: string }[]
 }
 
 // SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
@@ -29,6 +35,7 @@ export type SSEEvent =
   | { type: 'meta'; conversationId: string; title: string }
   | { type: 'chunk'; text: string }
   | { type: 'suggestions'; items: string[] }
+  | { type: 'brainstorm'; clusters: IdeaCluster[] }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
