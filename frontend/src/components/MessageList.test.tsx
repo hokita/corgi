@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import MessageList from './MessageList'
 import type { Message } from '../types'
+import type { IdeaCluster } from '../types'
 
 function msg(role: 'user' | 'assistant', content: string, suggestions?: string[]): Message {
   return { role, content, createdAt: new Date().toISOString(), suggestions }
@@ -73,5 +74,44 @@ describe('MessageList', () => {
     )
     expect(screen.getByText('Yes').closest('button')!.className).toContain('text-gray-400')
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
+  })
+
+  it('renders BrainstormClusters when message has clusters', () => {
+    const clusters: IdeaCluster[] = [
+      { label: 'Cluster A', ideas: [{ label: 'Idea 1', description: 'Desc 1' }] },
+    ]
+    render(
+      <MessageList
+        messages={[{ role: 'assistant', content: 'Here are ideas:', createdAt: '', clusters }]}
+        onSuggestionClick={() => {}}
+      />
+    )
+    expect(screen.getByText('Cluster A')).toBeInTheDocument()
+    expect(screen.getByText('Idea 1')).toBeInTheDocument()
+    expect(screen.getByText('Desc 1')).toBeInTheDocument()
+  })
+
+  it('renders BrainstormClusters above SuggestionButtons when both present', () => {
+    const clusters: IdeaCluster[] = [
+      { label: 'Cluster A', ideas: [{ label: 'Idea 1', description: 'Desc 1' }] },
+    ]
+    render(
+      <MessageList
+        messages={[
+          {
+            role: 'assistant',
+            content: '',
+            createdAt: '',
+            clusters,
+            suggestions: ['Cluster A'],
+          },
+        ]}
+        onSuggestionClick={() => {}}
+      />
+    )
+    const clusterTexts = screen.getAllByText('Cluster A')
+    expect(clusterTexts.length).toBe(2) // One in BrainstormClusters, one in SuggestionButtons
+    expect(screen.getByRole('button', { name: 'Cluster A' })).toBeInTheDocument()
+    expect(screen.getByText('Idea 1')).toBeInTheDocument()
   })
 })
