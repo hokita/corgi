@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import type { Message } from '../types'
 import MarkdownMessage from './MarkdownMessage'
 import SuggestionButtons from './SuggestionButtons'
-import BrainstormClusters from './BrainstormClusters'
 
 interface Props {
   messages: Message[]
@@ -40,9 +39,6 @@ export default function MessageList({ messages, onSuggestionClick }: Props) {
             >
               {m.role === 'user' ? m.content : <MarkdownMessage content={m.content} />}
             </div>
-            {m.role === 'assistant' && m.clusters && m.clusters.length > 0 && (
-              <BrainstormClusters clusters={m.clusters} />
-            )}
             {m.role === 'assistant' && m.suggestions && m.suggestions.length > 0 && (
               <SuggestionButtons
                 items={m.suggestions}

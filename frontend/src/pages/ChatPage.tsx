@@ -3,7 +3,7 @@ import { signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { auth } from '../firebase'
 import { api } from '../api'
-import type { Conversation, Message, IdeaCluster } from '../types'
+import type { Conversation, Message } from '../types'
 import MessageList from '../components/MessageList'
 import MessageInput from '../components/MessageInput'
 import HistoryDrawer from '../components/HistoryDrawer'
@@ -60,14 +60,6 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
-    const onBrainstorm = (clusters: IdeaCluster[]) => {
-      setMessages((prev) => {
-        const msgs = [...prev]
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], clusters }
-        return msgs
-      })
-    }
-
     const onError = () => {
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
@@ -91,7 +83,6 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onBrainstorm,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>
@@ -113,7 +104,6 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onBrainstorm,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>

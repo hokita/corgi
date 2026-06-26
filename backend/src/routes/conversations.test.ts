@@ -107,7 +107,7 @@ describe('POST /api/conversations', () => {
     }
     vi.mocked(mockAI.chatStream).mockReturnValue(stream())
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined, undefined)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
@@ -135,36 +135,7 @@ describe('POST /api/conversations', () => {
       .send({ message: 'Give me options' })
       .buffer(true)
     expect(firestoreService.addMessage).toHaveBeenCalledWith(
-      'conv123', 'assistant', 'Choose:', ['Yes', 'No'], undefined
-    )
-  })
-
-  it('emits brainstorm SSE event when AI yields brainstorm', async () => {
-    const clusters = [{ label: 'Cluster A', ideas: [{ label: 'Idea', description: 'Desc' }] }]
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield { type: 'brainstorm', clusters }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
-    const res = await request(app)
-      .post('/api/conversations')
-      .send({ message: 'Brainstorm ideas' })
-      .buffer(true)
-    const events = parseSSE(res.text)
-    expect(events).toContainEqual({ type: 'brainstorm', clusters })
-  })
-
-  it('saves clusters to Firestore with assistant message', async () => {
-    const clusters = [{ label: 'Cluster A', ideas: [{ label: 'Idea', description: 'Desc' }] }]
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield { type: 'brainstorm', clusters }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
-    await request(app)
-      .post('/api/conversations')
-      .send({ message: 'Brainstorm ideas' })
-      .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith(
-      'conv123', 'assistant', '', undefined, clusters
+      'conv123', 'assistant', 'Choose:', ['Yes', 'No']
     )
   })
 })
@@ -211,7 +182,7 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
       .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined, undefined)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
@@ -239,7 +210,7 @@ describe('POST /api/conversations/:id/messages', () => {
       .send({ message: 'Give me options' })
       .buffer(true)
     expect(firestoreService.addMessage).toHaveBeenCalledWith(
-      'conv123', 'assistant', 'Choose:', ['Option A', 'Option B'], undefined
+      'conv123', 'assistant', 'Choose:', ['Option A', 'Option B']
     )
   })
 })

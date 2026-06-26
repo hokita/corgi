@@ -1,5 +1,5 @@
 import { auth } from './firebase'
-import type { Conversation, Message, IdeaCluster } from './types'
+import type { Conversation, Message } from './types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -22,7 +22,6 @@ export interface StreamCallbacks {
   onMeta?: (meta: { conversationId: string; title: string }) => void
   onChunk: (text: string) => void
   onSuggestions?: (items: string[]) => void
-  onBrainstorm?: (clusters: IdeaCluster[]) => void
   onDone: () => void
   onError: (message: string) => void
 }
@@ -62,13 +61,11 @@ async function streamRequest(
         title?: string
         message?: string
         items?: string[]
-        clusters?: IdeaCluster[]
       }
       if (event.type === 'chunk') callbacks.onChunk(event.text!)
       else if (event.type === 'meta')
         callbacks.onMeta?.({ conversationId: event.conversationId!, title: event.title! })
       else if (event.type === 'suggestions') callbacks.onSuggestions?.(event.items!)
-      else if (event.type === 'brainstorm') callbacks.onBrainstorm?.(event.clusters!)
       else if (event.type === 'done') callbacks.onDone()
       else if (event.type === 'error') callbacks.onError(event.message!)
     }

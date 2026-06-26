@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
-import type { IdeaCluster } from '../models/api'
 import type { AIProvider, Message, StreamItem } from './AIProvider'
 
 const suggestOptionsTool = {
@@ -23,43 +22,6 @@ const suggestOptionsTool = {
   ],
 }
 
-const brainstormIdeasTool = {
-  functionDeclarations: [
-    {
-      name: 'brainstorm_ideas',
-      description:
-        'Call when the user is exploring, generating, or brainstorming ideas. Do NOT call for factual questions, weather, or conversational messages.',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          clusters: {
-            type: SchemaType.ARRAY,
-            items: {
-              type: SchemaType.OBJECT,
-              properties: {
-                label: { type: SchemaType.STRING },
-                ideas: {
-                  type: SchemaType.ARRAY,
-                  items: {
-                    type: SchemaType.OBJECT,
-                    properties: {
-                      label: { type: SchemaType.STRING },
-                      description: { type: SchemaType.STRING },
-                    },
-                    required: ['label', 'description'],
-                  },
-                },
-              },
-              required: ['label', 'ideas'],
-            },
-            description: '2 to 4 clusters of related ideas, each with 2 to 4 ideas',
-          },
-        },
-        required: ['clusters'],
-      },
-    },
-  ],
-}
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -75,13 +37,13 @@ export class GeminiProvider implements AIProvider {
     this.model = client.getGenerativeModel({
       model: 'gemini-3.5-flash',
       systemInstruction:
-        'You are a helpful assistant. When the user is exploring, generating, or brainstorming ideas, call `brainstorm_ideas` with 2–4 clusters of related ideas (2–4 ideas each). When it would help the user choose a next step, call `suggest_options` at the end of your response with 2 to 4 short button labels.',
+        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options.',
     })
   }
 
   async *chatStream(history: Message[], newMessage: string): AsyncIterable<StreamItem> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: any[] = [suggestOptionsTool, brainstormIdeasTool]
+    const tools: any[] = [suggestOptionsTool]
     if (this.googleSearch) tools.push({ googleSearch: {} })
     const chat = this.model.startChat({
       history: history.map((m) => ({
@@ -96,7 +58,6 @@ export class GeminiProvider implements AIProvider {
     })
     const result = await chat.sendMessageStream(newMessage)
 
-    let brainstormClusters: IdeaCluster[] | undefined
     let suggestOptionsItems: string[] | undefined
 
     for await (const chunk of result.stream) {
@@ -105,13 +66,7 @@ export class GeminiProvider implements AIProvider {
         for (const part of candidate.content?.parts ?? []) {
           if ('functionCall' in part) {
             const { name, args } = part.functionCall as { name: string; args: unknown }
-            if (name === 'brainstorm_ideas') {
-              hasFunctionCall = true
-              const clusters = (args as { clusters?: IdeaCluster[] }).clusters
-              if (Array.isArray(clusters) && clusters.length > 0) {
-                brainstormClusters = clusters
-              }
-            } else if (name === 'suggest_options') {
+            if (name === 'suggest_options') {
               hasFunctionCall = true
               const items = (args as { items?: string[] }).items
               if (Array.isArray(items) && items.length > 0) {
@@ -127,11 +82,7 @@ export class GeminiProvider implements AIProvider {
       }
     }
 
-    // Resolve priority after stream completes — brainstorm always wins
-    if (brainstormClusters) {
-      yield { type: 'brainstorm', clusters: brainstormClusters }
-      yield { type: 'suggestions', items: brainstormClusters.map((c) => c.label) }
-    } else if (suggestOptionsItems) {
+    if (suggestOptionsItems) {
       yield { type: 'suggestions', items: suggestOptionsItems }
     }
   }

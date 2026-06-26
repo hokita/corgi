@@ -1,5 +1,4 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import type { IdeaCluster } from '../models/api'
 
 export interface ConversationDoc {
   id: string
@@ -15,7 +14,6 @@ export interface FirestoreMessage {
   content: string
   createdAt: string
   suggestions?: string[]
-  clusters?: IdeaCluster[]
 }
 
 export async function createConversation(uid: string, title: string): Promise<string> {
@@ -54,13 +52,11 @@ export async function addMessage(
   conversationId: string,
   role: 'user' | 'assistant',
   content: string,
-  suggestions?: string[],
-  clusters?: IdeaCluster[]
+  suggestions?: string[]
 ): Promise<void> {
   const db = getFirestore()
   const data: Record<string, unknown> = { role, content, createdAt: Timestamp.now() }
   if (suggestions && suggestions.length > 0) data.suggestions = suggestions
-  if (clusters && clusters.length > 0) data.clusters = clusters
   await db
     .collection('conversations')
     .doc(conversationId)
@@ -84,7 +80,6 @@ export async function getMessages(conversationId: string): Promise<FirestoreMess
       createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
     }
     if (Array.isArray(data.suggestions)) msg.suggestions = data.suggestions as string[]
-    if (Array.isArray(data.clusters)) msg.clusters = data.clusters as IdeaCluster[]
     return msg
   })
 }

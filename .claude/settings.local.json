@@ -55,7 +55,9 @@
       "Bash($SKILL/scripts/review-package 17a2f8d0079f499eaecd6054f2bcd5c4df66077a *)",
       "Bash(gh secret *)",
       "Bash(gh variable *)",
-      "Bash(gcloud iam *)"
+      "Bash(gcloud iam *)",
+      "Bash(gh run *)",
+      "Bash(bash *)"
     ]
   }
 }

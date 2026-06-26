@@ -7,7 +7,6 @@ import type {
   MessageResponse,
   SSEEvent,
   ErrorResponse,
-  IdeaCluster,
 } from '../models/api'
 import * as db from '../services/firestore'
 
@@ -38,20 +37,16 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
       let fullText = ''
       let suggestions: string[] | undefined
-      let clusters: IdeaCluster[] | undefined
       for await (const item of ai.chatStream([], message)) {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
-        } else if (item.type === 'brainstorm') {
-          clusters = item.clusters
-          writeSSE(res, { type: 'brainstorm', clusters: item.clusters })
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
         }
       }
-      await db.addMessage(conversationId, 'assistant', fullText, suggestions, clusters)
+      await db.addMessage(conversationId, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(conversationId, fullText)
       writeSSE(res, { type: 'done' })
     } catch (err) {
@@ -90,20 +85,16 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
       let fullText = ''
       let suggestions: string[] | undefined
-      let clusters: IdeaCluster[] | undefined
       for await (const item of ai.chatStream(aiHistory, message)) {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
-        } else if (item.type === 'brainstorm') {
-          clusters = item.clusters
-          writeSSE(res, { type: 'brainstorm', clusters: item.clusters })
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
         }
       }
-      await db.addMessage(id, 'assistant', fullText, suggestions, clusters)
+      await db.addMessage(id, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(id, fullText)
       writeSSE(res, { type: 'done' })
     } catch (err) {
