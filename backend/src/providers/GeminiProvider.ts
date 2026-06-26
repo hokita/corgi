@@ -96,7 +96,8 @@ export class GeminiProvider implements AIProvider {
     })
     const result = await chat.sendMessageStream(newMessage)
 
-    let hasBrainstorm = false
+    let brainstormClusters: IdeaCluster[] | undefined
+    let suggestOptionsItems: string[] | undefined
 
     for await (const chunk of result.stream) {
       let hasFunctionCall = false
@@ -106,19 +107,15 @@ export class GeminiProvider implements AIProvider {
             const { name, args } = part.functionCall as { name: string; args: unknown }
             if (name === 'brainstorm_ideas') {
               hasFunctionCall = true
-              hasBrainstorm = true
               const clusters = (args as { clusters?: IdeaCluster[] }).clusters
               if (Array.isArray(clusters) && clusters.length > 0) {
-                yield { type: 'brainstorm', clusters }
-                yield { type: 'suggestions', items: clusters.map((c) => c.label) }
+                brainstormClusters = clusters
               }
             } else if (name === 'suggest_options') {
               hasFunctionCall = true
-              if (!hasBrainstorm) {
-                const items = (args as { items?: string[] }).items
-                if (Array.isArray(items) && items.length > 0) {
-                  yield { type: 'suggestions', items }
-                }
+              const items = (args as { items?: string[] }).items
+              if (Array.isArray(items) && items.length > 0) {
+                suggestOptionsItems = items
               }
             }
           }
@@ -128,6 +125,14 @@ export class GeminiProvider implements AIProvider {
         const text = chunk.text()
         if (text) yield text
       }
+    }
+
+    // Resolve priority after stream completes — brainstorm always wins
+    if (brainstormClusters) {
+      yield { type: 'brainstorm', clusters: brainstormClusters }
+      yield { type: 'suggestions', items: brainstormClusters.map((c) => c.label) }
+    } else if (suggestOptionsItems) {
+      yield { type: 'suggestions', items: suggestOptionsItems }
     }
   }
 }

@@ -195,17 +195,18 @@ describe('GeminiProvider', () => {
     ])
   })
 
-  it('ignores suggest_options when brainstorm_ideas was already called', async () => {
+  it('ignores suggest_options when brainstorm_ideas arrives later in the stream', async () => {
     const clusters = [
       { label: 'Cluster A', ideas: [{ label: 'Idea 1', description: 'Desc 1' }] },
     ]
+    // suggest_options arrives BEFORE brainstorm_ideas — the previously unguarded case
     async function* fakeStream() {
       yield {
         text: () => '',
         candidates: [
           {
             content: {
-              parts: [{ functionCall: { name: 'brainstorm_ideas', args: { clusters } } }],
+              parts: [{ functionCall: { name: 'suggest_options', args: { items: ['Extra', 'Button'] } } }],
             },
           },
         ],
@@ -215,7 +216,7 @@ describe('GeminiProvider', () => {
         candidates: [
           {
             content: {
-              parts: [{ functionCall: { name: 'suggest_options', args: { items: ['Extra', 'Button'] } } }],
+              parts: [{ functionCall: { name: 'brainstorm_ideas', args: { clusters } } }],
             },
           },
         ],
