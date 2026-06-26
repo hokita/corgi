@@ -62,5 +62,4 @@ jobs:
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
-          echo "Token chars: ${#GOOGLE_OAUTH_ACCESS_TOKEN}"
-          firebase deploy --only hosting --project corgi-8732c
+          firebase deploy --only hosting --project corgi-8732c --debug 2>&1
