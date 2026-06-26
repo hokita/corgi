@@ -55,7 +55,12 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools@13
 
+      - name: Check auth token
+        run: echo "Token length ${{ steps.auth.outputs.access_token && 'non-empty' || 'EMPTY' }}"
+
       - name: Deploy to Firebase Hosting
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-        run: firebase deploy --only hosting --project corgi-8732c
+        run: |
+          echo "Token chars: ${#GOOGLE_OAUTH_ACCESS_TOKEN}"
+          firebase deploy --only hosting --project corgi-8732c
