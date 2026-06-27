@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import type { AIProvider, FunctionExecutor } from '../providers/AIProvider'
+import type { AIProvider, TitleGenerator, FunctionExecutor } from '../providers/AIProvider'
 import type {
   CreateConversationRequest,
   SendMessageRequest,
@@ -32,7 +32,7 @@ function makeExecutor(uid: string, conversationId: string, res: import('express'
   }
 }
 
-export function createConversationsRouter(ai: AIProvider): Router {
+export function createConversationsRouter(ai: AIProvider, titleGen: TitleGenerator): Router {
   const router = Router()
 
   router.post<Record<string, never>, unknown, CreateConversationRequest>('/', async (req, res) => {
@@ -42,7 +42,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
       res.status(400).json({ error: 'message is required' } as ErrorResponse)
       return
     }
-    const title = message.slice(0, 40)
+    const title = await titleGen.generateTitle(message)
     try {
       const conversationId = await db.createConversation(uid, title)
       await db.addMessage(conversationId, 'user', message)

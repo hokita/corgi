@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
-import type { AIProvider, FunctionExecutor } from '../providers/AIProvider'
+import type { AIProvider, TitleGenerator, FunctionExecutor } from '../providers/AIProvider'
 import type { StreamItem } from '../providers/AIProvider'
 
 vi.mock('../services/firestore', () => ({
@@ -52,6 +52,10 @@ const mockAI: AIProvider = {
   }),
 }
 
+const mockTitleGen: TitleGenerator = {
+  generateTitle: vi.fn().mockResolvedValue('Mock Title'),
+}
+
 function mockAuth(req: Request, _: Response, next: NextFunction) {
   req.uid = 'u1'
   next()
@@ -59,7 +63,7 @@ function mockAuth(req: Request, _: Response, next: NextFunction) {
 
 const app = express()
 app.use(express.json())
-app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI))
+app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI, mockTitleGen))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -68,6 +72,7 @@ beforeEach(() => {
     capturedExecuteFn = executeFn
     return defaultStream()
   })
+  vi.mocked(mockTitleGen.generateTitle).mockResolvedValue('Mock Title')
 })
 
 function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }> {
@@ -93,7 +98,7 @@ describe('POST /api/conversations', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toContain('text/event-stream')
     const events = parseSSE(res.text)
-    expect(events[0]).toEqual({ type: 'meta', conversationId: 'conv123', title: 'Hello world' })
+    expect(events[0]).toEqual({ type: 'meta', conversationId: 'conv123', title: 'Mock Title' })
     expect(events).toContainEqual({ type: 'chunk', text: 'Hello' })
     expect(events).toContainEqual({ type: 'chunk', text: ' world' })
     expect(events[events.length - 1]).toEqual({ type: 'done' })
@@ -105,12 +110,14 @@ describe('POST /api/conversations', () => {
     expect(res.body.error).toBe('message is required')
   })
 
-  it('truncates title to 40 chars', async () => {
+  it('uses AI-generated title from titleGen', async () => {
+    vi.mocked(mockTitleGen.generateTitle).mockResolvedValueOnce('Learning Japanese')
     await request(app)
       .post('/api/conversations')
-      .send({ message: 'A'.repeat(60) })
+      .send({ message: 'I want to learn Japanese' })
       .buffer(true)
-    expect(firestoreService.createConversation).toHaveBeenCalledWith('u1', 'A'.repeat(40))
+    expect(mockTitleGen.generateTitle).toHaveBeenCalledWith('I want to learn Japanese')
+    expect(firestoreService.createConversation).toHaveBeenCalledWith('u1', 'Learning Japanese')
   })
 
   it('saves full accumulated assistant message to Firestore', async () => {

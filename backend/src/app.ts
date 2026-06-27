@@ -10,14 +10,11 @@ export function createApp() {
   app.use(cors({ origin: process.env.FRONTEND_URL }))
   app.use(express.json())
   app.get('/health', (_req, res) => res.json({ ok: true }))
+  const provider = new GeminiProvider(process.env.GEMINI_API_KEY!, { googleSearch: true })
   app.use(
     '/api/conversations',
     authMiddleware,
-    createConversationsRouter(
-      new GeminiProvider(process.env.GEMINI_API_KEY!, {
-        googleSearch: true,
-      })
-    )
+    createConversationsRouter(provider, provider)
   )
   return app
 }
