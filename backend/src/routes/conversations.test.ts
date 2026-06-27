@@ -32,6 +32,7 @@ vi.mock('../services/firestore', () => ({
     ),
   updateConversationLastMessage: vi.fn().mockResolvedValue(undefined),
   deleteConversation: vi.fn().mockResolvedValue(undefined),
+  saveEnglishMistake: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { createConversationsRouter } from './conversations'
@@ -81,9 +82,9 @@ describe('POST /api/conversations', () => {
     expect(res.headers['content-type']).toContain('text/event-stream')
     const events = parseSSE(res.text)
     expect(events[0]).toEqual({ type: 'meta', conversationId: 'conv123', title: 'Hello world' })
-    expect(events[1]).toEqual({ type: 'chunk', text: 'Hello' })
-    expect(events[2]).toEqual({ type: 'chunk', text: ' world' })
-    expect(events[3]).toEqual({ type: 'done' })
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' })
+    expect(events).toContainEqual({ type: 'chunk', text: ' world' })
+    expect(events[events.length - 1]).toEqual({ type: 'done' })
   })
 
   it('returns 400 JSON when message is missing', async () => {
@@ -138,6 +139,39 @@ describe('POST /api/conversations', () => {
       'conv123', 'assistant', 'Choose:', ['Yes', 'No']
     )
   })
+
+  it('emits progress events around the response', async () => {
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Hello' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    const progressEvents = events.filter((e) => e.type === 'progress')
+    expect(progressEvents[0]).toEqual({ type: 'progress', message: 'Analyzing your message...' })
+    expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
+  })
+
+  it('saves english mistake and emits progress when AI yields save_english_mistake', async () => {
+    const mistakeData = {
+      originalText: 'I go to school yesterday.',
+      correctedText: 'I went to school yesterday.',
+      category: 'grammar',
+      severity: 'medium',
+      patternKey: 'past_tense_for_past_action',
+    }
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Good effort!'
+      yield { type: 'save_english_mistake', data: mistakeData }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'I go to school yesterday.' })
+      .buffer(true)
+    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({ type: 'progress', message: 'Saving learning point...' })
+  })
 })
 
 describe('POST /api/conversations/:id/messages', () => {
@@ -153,8 +187,8 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toContain('text/event-stream')
     const events = parseSSE(res.text)
-    expect(events[0]).toEqual({ type: 'chunk', text: 'AI reply' })
-    expect(events[1]).toEqual({ type: 'done' })
+    expect(events).toContainEqual({ type: 'chunk', text: 'AI reply' })
+    expect(events[events.length - 1]).toEqual({ type: 'done' })
   })
 
   it('returns 404 JSON when conversation not found', async () => {
@@ -212,6 +246,39 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(firestoreService.addMessage).toHaveBeenCalledWith(
       'conv123', 'assistant', 'Choose:', ['Option A', 'Option B']
     )
+  })
+
+  it('emits progress events around the response', async () => {
+    const res = await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'Hello' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    const progressEvents = events.filter((e) => e.type === 'progress')
+    expect(progressEvents[0]).toEqual({ type: 'progress', message: 'Analyzing your message...' })
+    expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
+  })
+
+  it('saves english mistake and emits progress when AI yields save_english_mistake', async () => {
+    const mistakeData = {
+      originalText: 'I go to school yesterday.',
+      correctedText: 'I went to school yesterday.',
+      category: 'grammar',
+      severity: 'medium',
+      patternKey: 'past_tense_for_past_action',
+    }
+    async function* stream(): AsyncIterable<StreamItem> {
+      yield 'Good effort!'
+      yield { type: 'save_english_mistake', data: mistakeData }
+    }
+    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    const res = await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'I go to school yesterday.' })
+      .buffer(true)
+    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({ type: 'progress', message: 'Saving learning point...' })
   })
 })
 

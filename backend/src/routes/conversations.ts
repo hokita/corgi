@@ -34,6 +34,7 @@ export function createConversationsRouter(ai: AIProvider): Router {
       res.setHeader('Connection', 'keep-alive')
 
       writeSSE(res, { type: 'meta', conversationId, title })
+      writeSSE(res, { type: 'progress', message: 'Analyzing your message...' })
 
       let fullText = ''
       let suggestions: string[] | undefined
@@ -44,10 +45,14 @@ export function createConversationsRouter(ai: AIProvider): Router {
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
+        } else if (item.type === 'save_english_mistake') {
+          await db.saveEnglishMistake(uid, conversationId, item.data)
+          writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
         }
       }
       await db.addMessage(conversationId, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(conversationId, fullText)
+      writeSSE(res, { type: 'progress', message: 'Done' })
       writeSSE(res, { type: 'done' })
     } catch (err) {
       console.error(err)
@@ -83,6 +88,8 @@ export function createConversationsRouter(ai: AIProvider): Router {
       res.setHeader('Cache-Control', 'no-cache')
       res.setHeader('Connection', 'keep-alive')
 
+      writeSSE(res, { type: 'progress', message: 'Analyzing your message...' })
+
       let fullText = ''
       let suggestions: string[] | undefined
       for await (const item of ai.chatStream(aiHistory, message)) {
@@ -92,10 +99,14 @@ export function createConversationsRouter(ai: AIProvider): Router {
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
+        } else if (item.type === 'save_english_mistake') {
+          await db.saveEnglishMistake(uid, id, item.data)
+          writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
         }
       }
       await db.addMessage(id, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(id, fullText)
+      writeSSE(res, { type: 'progress', message: 'Done' })
       writeSSE(res, { type: 'done' })
     } catch (err) {
       console.error(err)
