@@ -22,6 +22,7 @@ export interface StreamCallbacks {
   onMeta?: (meta: { conversationId: string; title: string }) => void
   onChunk: (text: string) => void
   onSuggestions?: (items: string[]) => void
+  onProgress?: (message: string) => void
   onDone: () => void
   onError: (message: string) => void
 }
@@ -66,6 +67,7 @@ async function streamRequest(
       else if (event.type === 'meta')
         callbacks.onMeta?.({ conversationId: event.conversationId!, title: event.title! })
       else if (event.type === 'suggestions') callbacks.onSuggestions?.(event.items!)
+      else if (event.type === 'progress') callbacks.onProgress?.(event.message!)
       else if (event.type === 'done') callbacks.onDone()
       else if (event.type === 'error') callbacks.onError(event.message!)
     }

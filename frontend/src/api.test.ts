@@ -110,6 +110,22 @@ describe('api.sendMessage', () => {
     expect(onError).toHaveBeenCalledWith('Internal server error')
     expect(onDone).not.toHaveBeenCalled()
   })
+
+  it('calls onProgress for each progress event', async () => {
+    mockStreamResponse([
+      { type: 'progress', message: 'Analyzing your message...' },
+      { type: 'chunk', text: 'Hello' },
+      { type: 'progress', message: 'Done' },
+      { type: 'done' },
+    ])
+    const onProgress = vi.fn()
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.sendMessage('c1', 'hi', { onProgress, onChunk, onDone, onError })
+    expect(onProgress).toHaveBeenNthCalledWith(1, 'Analyzing your message...')
+    expect(onProgress).toHaveBeenNthCalledWith(2, 'Done')
+  })
 })
 
 describe('api.deleteConversation', () => {
