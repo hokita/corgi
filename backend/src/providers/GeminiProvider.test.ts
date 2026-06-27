@@ -203,8 +203,9 @@ describe('GeminiProvider', () => {
     // raw model parts (including thought_signature) are preserved in the history
     expect(mockSendMessageStream).toHaveBeenCalledTimes(1)
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
-    const followUpContents = (mockGenerateContentStream.mock.calls[0][0] as any).contents
-    const modelTurn = followUpContents.find((c: any) => c.role === 'model')
+    type ContentTurn = { role: string; parts: unknown[] }
+    const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
+    const modelTurn = followUpArg.contents.find((c) => c.role === 'model')
     expect(modelTurn.parts[0]).toMatchObject({
       functionCall: expect.objectContaining({ thought_signature: 'abc123' }),
     })
