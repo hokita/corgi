@@ -255,10 +255,6 @@ describe('GeminiProvider', () => {
   })
 
   it('executes non-suggest_options function calls in follow-up stream and yields text', async () => {
-    // Scenario: model calls save_english_mistake in the initial stream (no text),
-    // then in the follow-up the model calls save_english_mistake AGAIN before producing text.
-    // Previously hasFunctionCall was not set for non-suggest_options calls, causing
-    // chunk.text() to be called on a function-call chunk and the function to be ignored.
     const mistakeData = { originalText: 'I go', correctedText: 'I went', category: 'grammar', severity: 'low', patternKey: 'past_tense' }
     async function* firstStream() {
       yield {
@@ -267,7 +263,9 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      // Follow-up model calls save_english_mistake again, then produces text
+      // Follow-up calls save_english_mistake again, then produces text.
+      // hasText becomes true after the text chunk, so the loop exits even though
+      // pendingFunctionResponses has an entry from this round.
       yield {
         text: () => '',
         candidates: [{ content: { parts: [{ functionCall: { name: 'save_english_mistake', args: mistakeData } }] } }],
@@ -281,10 +279,34 @@ describe('GeminiProvider', () => {
     const provider = new GeminiProvider('fake-key')
     const items = await collectStream(provider.chatStream([], 'I go to school yesterday.', executeFn))
 
-    // executeFn called twice: once in first stream, once in follow-up stream
     expect(executeFn).toHaveBeenCalledTimes(2)
     expect(executeFn).toHaveBeenCalledWith('save_english_mistake', mistakeData)
-    // Text from follow-up is yielded correctly
     expect(items).toContain('Great job!')
+  })
+
+  it('stops after MAX_FOLLOW_UP_ROUNDS (5) if the model never produces text', async () => {
+    const fnCall = { name: 'save_english_mistake', args: { originalText: 'x', correctedText: 'y', category: 'grammar', severity: 'low', patternKey: 'p' } }
+    async function* fnOnlyStream() {
+      yield {
+        text: () => '',
+        candidates: [{ content: { parts: [{ functionCall: fnCall }] } }],
+      }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: fnOnlyStream() })
+    // Each of the 5 follow-up rounds also returns only a function call, never text
+    for (let i = 0; i < 5; i++) {
+      mockGenerateContentStream.mockResolvedValueOnce({ stream: fnOnlyStream() })
+    }
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', executeFn))
+
+    // 1 from first stream + 5 from follow-up rounds = 6 total
+    expect(executeFn).toHaveBeenCalledTimes(6)
+    // generateContentStream called exactly 5 times (MAX_FOLLOW_UP_ROUNDS)
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(5)
+    // No text was ever produced — stream ends empty (no crash)
+    expect(items).toEqual([])
   })
 })

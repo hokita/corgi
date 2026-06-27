@@ -115,11 +115,11 @@ export class GeminiProvider implements AIProvider {
 
     let suggestOptionsItems: string[] | undefined
     let hasText = false
-    const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
+    let pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
     // Capture raw parts from the stream. The SDK's ChatSession strips
     // thought_signature when merging chunks into its internal history, so we
     // preserve the raw parts ourselves for use in the follow-up call.
-    const rawModelParts: unknown[] = []
+    let rawModelParts: unknown[] = []
 
     for await (const chunk of result.stream) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,22 +158,40 @@ export class GeminiProvider implements AIProvider {
     // back so Gemini produces its text response. Use model.generateContentStream
     // with manually-built history (not chat.sendMessageStream) so the raw model
     // parts — including thought_signature — are preserved in the request.
-    if (pendingFunctionResponses.length > 0 && !hasText) {
-      const manualHistory = [
-        ...history.map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        })),
-        { role: 'user', parts: [{ text: newMessage }] },
-        { role: 'model', parts: rawModelParts },
-        { role: 'user', parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })) },
-      ]
+    // Loop up to MAX_FOLLOW_UP_ROUNDS in case the model keeps calling functions
+    // without producing text across multiple turns.
+    const MAX_FOLLOW_UP_ROUNDS = 5
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const followUpContents: any[] = [
+      ...history.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+      { role: 'user', parts: [{ text: newMessage }] },
+    ]
+
+    let followUpRound = 0
+    while (pendingFunctionResponses.length > 0 && !hasText && followUpRound < MAX_FOLLOW_UP_ROUNDS) {
+      followUpRound++
+      followUpContents.push({ role: 'model', parts: rawModelParts })
+      followUpContents.push({
+        role: 'user',
+        parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })),
+      })
+
+      rawModelParts = []
+      pendingFunctionResponses = []
+
       const followUp = await this.model.generateContentStream(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { contents: manualHistory, tools, toolConfig: { includeServerSideToolInvocations: true } } as any
+        { contents: followUpContents, tools, toolConfig: { includeServerSideToolInvocations: true } } as any
       )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of followUp.stream as any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const part of (chunk as any).candidates?.[0]?.content?.parts ?? []) {
+          rawModelParts.push(part)
+        }
         let hasFunctionCall = false
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const candidate of (chunk as any).candidates ?? []) {
@@ -187,7 +205,8 @@ export class GeminiProvider implements AIProvider {
                   suggestOptionsItems = items
                 }
               } else {
-                await executeFn(name, args)
+                const response = await executeFn(name, args)
+                pendingFunctionResponses.push({ name, response })
               }
             }
           }
@@ -195,7 +214,10 @@ export class GeminiProvider implements AIProvider {
         if (!hasFunctionCall) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const text = (chunk as any).text?.()
-          if (text) yield text
+          if (text) {
+            hasText = true
+            yield text
+          }
         }
       }
     }
