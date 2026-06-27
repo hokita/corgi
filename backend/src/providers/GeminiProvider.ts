@@ -160,7 +160,7 @@ export class GeminiProvider implements AIProvider {
     // parts — including thought_signature — are preserved in the request.
     // Loop up to MAX_FOLLOW_UP_ROUNDS in case the model keeps calling functions
     // without producing text across multiple turns.
-    const MAX_FOLLOW_UP_ROUNDS = 5
+    const MAX_TOOL_CALL_ROUNDS = 5
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const followUpContents: any[] = [
       ...history.map((m) => ({
@@ -171,7 +171,7 @@ export class GeminiProvider implements AIProvider {
     ]
 
     let followUpRound = 0
-    while (pendingFunctionResponses.length > 0 && !hasText && followUpRound < MAX_FOLLOW_UP_ROUNDS) {
+    while (pendingFunctionResponses.length > 0 && !hasText && followUpRound < MAX_TOOL_CALL_ROUNDS) {
       followUpRound++
       followUpContents.push({ role: 'model', parts: rawModelParts })
       followUpContents.push({
