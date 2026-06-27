@@ -82,25 +82,30 @@ export interface GeminiProviderOptions {
   googleSearch?: boolean
 }
 
+function currentJstDatetime(): string {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Tokyo' }).replace('T', ' ') + ' JST'
+}
+
 export class GeminiProvider implements AIProvider {
-  private model: ReturnType<InstanceType<typeof GoogleGenerativeAI>['getGenerativeModel']>
+  private client: GoogleGenerativeAI
   private googleSearch: boolean
 
   constructor(apiKey: string, options: GeminiProviderOptions = {}) {
     this.googleSearch = options.googleSearch ?? false
-    const client = new GoogleGenerativeAI(apiKey)
-    this.model = client.getGenerativeModel({
-      model: 'gemini-3.5-flash',
-      systemInstruction:
-        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$.',
-    })
+    this.client = new GoogleGenerativeAI(apiKey)
   }
 
   async *chatStream(history: Message[], newMessage: string, executeFn: FunctionExecutor): AsyncIterable<StreamItem> {
+    const model = this.client.getGenerativeModel({
+      model: 'gemini-3.5-flash',
+      systemInstruction:
+        `The current date and time is ${currentJstDatetime()}. ` +
+        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$.',
+    })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: any[] = [functionTools]
     if (this.googleSearch) tools.push({ googleSearch: {} })
-    const chat = this.model.startChat({
+    const chat = model.startChat({
       history: history.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
@@ -168,7 +173,7 @@ export class GeminiProvider implements AIProvider {
         { role: 'model', parts: rawModelParts },
         { role: 'user', parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })) },
       ]
-      const followUp = await this.model.generateContentStream(
+      const followUp = await model.generateContentStream(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { contents: manualHistory, tools, toolConfig: { includeServerSideToolInvocations: true } } as any
       )

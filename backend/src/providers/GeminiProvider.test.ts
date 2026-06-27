@@ -33,6 +33,28 @@ async function collectStream(stream: AsyncIterable<StreamItem>): Promise<StreamI
 describe('GeminiProvider', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('includes current JST datetime in system instruction', async () => {
+    vi.useFakeTimers()
+    // 2026-06-27T10:00:00Z = 2026-06-27T19:00:00+09:00 in JST
+    vi.setSystemTime(new Date('2026-06-27T10:00:00.000Z'))
+
+    async function* fakeStream() {
+      yield { text: () => 'reply', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+
+    expect(mockGetGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemInstruction: expect.stringContaining('2026-06-27 19:00:00 JST'),
+      })
+    )
+
+    vi.useRealTimers()
+  })
+
   it('yields text chunks from Gemini stream', async () => {
     async function* fakeStream() {
       yield { text: () => 'Hello', candidates: undefined }
