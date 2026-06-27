@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>thought_signature Bug — Root Cause</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      padding: 48px 24px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 1.75rem; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
+    .subtitle { color: #94a3b8; margin-bottom: 48px; font-size: 0.95rem; }
+    h2 {
+      font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #64748b; margin-bottom: 16px;
+    }
+    .section { margin-bottom: 52px; }
+
+    /* ── Timeline ── */
+    .timeline { display: flex; flex-direction: column; gap: 0; }
+
+    .tl-item {
+      display: grid;
+      grid-template-columns: 160px 40px 1fr;
+      gap: 0 0;
+      align-items: stretch;
+    }
+
+    .tl-label {
+      text-align: right;
+      padding: 18px 16px 18px 0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      line-height: 1.3;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .tl-spine {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tl-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-top: 22px;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .tl-line {
+      width: 2px;
+      flex: 1;
+      margin-top: 2px;
+    }
+
+    .tl-body {
+      padding: 14px 0 14px 20px;
+    }
+
+    .tl-card {
+      background: #1e2433;
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid #2d3748;
+    }
+
+    .tl-card p {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      margin-bottom: 8px;
+    }
+
+    .tl-card p:last-child { margin-bottom: 0; }
+
+    .tl-card .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 6px;
+    }
+
+    /* colour themes per step */
+    .step-user    .tl-dot { background: #3b82f6; }
+    .step-user    .tl-line { background: #1e3a5f; }
+    .step-user    .tl-card { border-color: #1e3a5f; }
+    .step-user    .label   { color: #60a5fa; }
+
+    .step-think   .tl-dot { background: #a78bfa; }
+    .step-think   .tl-line { background: #2e1d5e; }
+    .step-think   .tl-card { border-color: #2e1d5e; background: #1a1830; }
+    .step-think   .label   { color: #a78bfa; }
+
+    .step-fn      .tl-dot { background: #f59e0b; }
+    .step-fn      .tl-line { background: #3d2a00; }
+    .step-fn      .tl-card { border-color: #3d2a00; }
+    .step-fn      .label   { color: #fbbf24; }
+
+    .step-sdk     .tl-dot { background: #ef4444; }
+    .step-sdk     .tl-line { background: #450a0a; }
+    .step-sdk     .tl-card { border-color: #7f1d1d; background: #1c0a0a; }
+    .step-sdk     .label   { color: #f87171; }
+
+    .step-loop    .tl-dot { background: #ef4444; }
+    .step-loop    .tl-line { background: #450a0a; }
+    .step-loop    .tl-card { border-color: #7f1d1d; background: #1c0a0a; }
+    .step-loop    .label   { color: #f87171; }
+
+    .step-400     .tl-dot { background: #ef4444; box-shadow: 0 0 0 4px #450a0a; }
+    .step-400     .tl-line { background: transparent; }
+    .step-400     .tl-card { border-color: #dc2626; background: #1c0a0a; }
+    .step-400     .label   { color: #f87171; }
+
+    /* code inline */
+    code {
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.82em;
+      background: #0d1117;
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #c3e88d;
+    }
+
+    .thought-sig {
+      display: inline-block;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.72rem;
+      background: #2e1d5e;
+      color: #c4b5fd;
+      border: 1px solid #4c1d95;
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+
+    .thought-sig.missing {
+      background: #450a0a;
+      color: #f87171;
+      border-color: #7f1d1d;
+      text-decoration: line-through;
+    }
+
+    /* ── JSON blocks ── */
+    .json-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .json-block {
+      background: #0d1117;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2d3748;
+    }
+
+    .json-block.bad  { border-color: #7f1d1d; }
+    .json-block.good { border-color: #166534; }
+
+    .json-header {
+      padding: 8px 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .json-block.bad  .json-header { background: #1c0a0a; color: #f87171; border-color: #7f1d1d; }
+    .json-block.good .json-header { background: #0d2818; color: #86efac; border-color: #166534; }
+
+    .json-body {
+      padding: 14px;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #94a3b8;
+      white-space: pre;
+    }
+
+    .json-body .key    { color: #82aaff; }
+    .json-body .str    { color: #c3e88d; }
+    .json-body .sig    { color: #c4b5fd; }
+    .json-body .miss   { color: #f87171; text-decoration: line-through; }
+    .json-body .num    { color: #f78c6c; }
+    .json-body .fix    { color: #86efac; }
+
+    /* ── Fix box ── */
+    .fix-box {
+      background: #0d2818;
+      border: 1px solid #166534;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+
+    .fix-box .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #4ade80;
+      margin-bottom: 10px;
+    }
+
+    .fix-code {
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.8;
+      color: #94a3b8;
+      white-space: pre;
+      margin-bottom: 14px;
+      overflow-x: auto;
+    }
+
+    .fix-code .kw  { color: #c792ea; }
+    .fix-code .str { color: #c3e88d; }
+    .fix-code .key { color: #82aaff; }
+    .fix-code .num { color: #f78c6c; }
+    .fix-code .cmt { color: #546e7a; font-style: italic; }
+    .fix-code .add { color: #86efac; }
+
+    .fix-box p { font-size: 0.88rem; color: #86efac; }
+
+    /* ── Tradeoff ── */
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .tradeoff-card {
+      background: #1e2433;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .tradeoff-card h4 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .tradeoff-card.pro h4 { color: #86efac; }
+    .tradeoff-card.con h4 { color: #fca5a5; }
+
+    .tradeoff-card p { font-size: 0.85rem; color: #94a3b8; }
+
+    @media (max-width: 640px) {
+      .json-grid, .tradeoff { grid-template-columns: 1fr; }
+      .tl-item { grid-template-columns: 80px 32px 1fr; }
+      .tl-label { font-size: 0.68rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>thought_signature Bug</h1>
+  <p class="subtitle">Why the agentic loop failed with 400 Bad Request</p>
+
+  <!-- ── 1. What is a thought_signature ── -->
+  <div class="section">
+    <h2>Background — what is a thought_signature?</h2>
+    <div style="background:#1e2433;border:1px solid #2d3748;border-radius:10px;padding:20px 24px;max-width:680px;">
+      <p style="font-size:0.9rem;color:#cbd5e1;margin-bottom:10px;">
+        <code>gemini-3.5-flash</code> has <strong style="color:#a78bfa">thinking mode</strong> on by default.
+        Before answering, the model privately reasons through the problem — like mental scratch work.
+      </p>
+      <p style="font-size:0.9rem;color:#cbd5e1;margin-bottom:10px;">
+        Whenever the model decides to call a function <em>while thinking</em>, the Gemini API
+        stamps the function call with a <span class="thought-sig">thought_signature</span> —
+        an opaque token that ties the function call back to the specific reasoning turn that produced it.
+      </p>
+      <p style="font-size:0.9rem;color:#cbd5e1;">
+        On follow-up requests, the API expects that <span class="thought-sig">thought_signature</span>
+        to still be present in the conversation history. If it's missing → <strong style="color:#f87171">400 Bad Request</strong>.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── 2. The failure timeline ── -->
+  <div class="section">
+    <h2>What happened — step by step</h2>
+    <div class="timeline">
+
+      <div class="tl-item step-user">
+        <div class="tl-label">User sends<br>message</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">User turn</div>
+            <p>"I go to school yesterday and learn many things."</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-item step-think">
+        <div class="tl-label">Gemini<br>thinks</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">Internal reasoning (hidden)</div>
+            <p>Model silently reasons: "two tense errors — <em>go → went</em>, <em>learn → learned</em>. I should call <code>save_english_mistake</code>."</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-item step-fn">
+        <div class="tl-label">Gemini<br>calls function</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">Stream — Turn 1 response (no text)</div>
+            <p>The API returns a function call part, tagged with a <span class="thought-sig">thought_signature</span> because thinking was active.</p>
+            <p style="margin-top:8px;font-family:monospace;font-size:0.78rem;color:#94a3b8;">
+              { name: "save_english_mistake", args: {...},<br>
+              &nbsp;&nbsp;<span style="color:#c4b5fd">thought_signature: "AaBbCc..."</span> }
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-item step-sdk">
+        <div class="tl-label">SDK stores<br>in history</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">SDK bug — thought_signature dropped</div>
+            <p>The <code>@google/generative-ai</code> SDK accumulates streaming chunks into the chat history — but it does not preserve <span class="thought-sig missing">thought_signature</span> when merging the parts.</p>
+            <p style="margin-top:8px;font-family:monospace;font-size:0.78rem;color:#94a3b8;">
+              { name: "save_english_mistake", args: {...} }<br>
+              <span style="color:#f87171">// thought_signature is gone</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-item step-loop">
+        <div class="tl-label">Our loop<br>sends result back</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">Turn 2 — agentic loop</div>
+            <p>We call <code>chat.sendMessageStream([{ functionResponse: ... }])</code>. The SDK builds the request from its history — which now has the function call <strong>without</strong> <span class="thought-sig missing">thought_signature</span>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-item step-400">
+        <div class="tl-label">Gemini<br>rejects it</div>
+        <div class="tl-spine">
+          <div class="tl-dot"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-body">
+          <div class="tl-card">
+            <div class="label">400 Bad Request</div>
+            <p>"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly."</p>
+            <p style="margin-top:8px;color:#64748b;font-size:0.82rem;">User sees an empty assistant bubble. Stream hangs until timeout.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 3. What the history looks like ── -->
+  <div class="section">
+    <h2>What the SDK sends — before vs what Gemini expects</h2>
+    <div class="json-grid">
+
+      <div class="json-block bad">
+        <div class="json-header">What SDK sends (broken)</div>
+        <div class="json-body">{
+  <span class="key">"contents"</span>: [
+    { <span class="key">"role"</span>: <span class="str">"user"</span>,
+      <span class="key">"parts"</span>: [{ <span class="key">"text"</span>: <span class="str">"I go to school..."</span> }] },
+
+    { <span class="key">"role"</span>: <span class="str">"model"</span>,
+      <span class="key">"parts"</span>: [{
+        <span class="key">"functionCall"</span>: {
+          <span class="key">"name"</span>: <span class="str">"save_english_mistake"</span>,
+          <span class="key">"args"</span>: { ... }
+          <span class="miss">// thought_signature missing!</span>
+        }
+      }] },
+
+    { <span class="key">"role"</span>: <span class="str">"user"</span>,
+      <span class="key">"parts"</span>: [{
+        <span class="key">"functionResponse"</span>: {
+          <span class="key">"name"</span>: <span class="str">"save_english_mistake"</span>,
+          <span class="key">"response"</span>: { <span class="key">"result"</span>: <span class="str">"saved"</span> }
+        }
+      }] }
+  ]
+}</div>
+      </div>
+
+      <div class="json-block good">
+        <div class="json-header">What Gemini expects (correct)</div>
+        <div class="json-body">{
+  <span class="key">"contents"</span>: [
+    { <span class="key">"role"</span>: <span class="str">"user"</span>,
+      <span class="key">"parts"</span>: [{ <span class="key">"text"</span>: <span class="str">"I go to school..."</span> }] },
+
+    { <span class="key">"role"</span>: <span class="str">"model"</span>,
+      <span class="key">"parts"</span>: [{
+        <span class="key">"functionCall"</span>: {
+          <span class="key">"name"</span>: <span class="str">"save_english_mistake"</span>,
+          <span class="key">"args"</span>: { ... },
+          <span class="sig">"thought_signature"</span>: <span class="sig">"AaBbCc..."</span>
+          <span class="fix">// ← must be preserved!</span>
+        }
+      }] },
+
+    { <span class="key">"role"</span>: <span class="str">"user"</span>,
+      <span class="key">"parts"</span>: [{
+        <span class="key">"functionResponse"</span>: {
+          <span class="key">"name"</span>: <span class="str">"save_english_mistake"</span>,
+          <span class="key">"response"</span>: { <span class="key">"result"</span>: <span class="str">"saved"</span> }
+        }
+      }] }
+  ]
+}</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 4. The fix ── -->
+  <div class="section">
+    <h2>The fix</h2>
+    <div class="fix-box">
+      <div class="label">Solution — disable thinking mode</div>
+      <div class="fix-code"><span class="kw">this</span>.model = client.<span class="key">getGenerativeModel</span>({
+  <span class="key">model</span>: <span class="str">'gemini-3.5-flash'</span>,
+  <span class="key">systemInstruction</span>: <span class="str">'...'</span>,
+<span class="add">+ generationConfig: {
++   thinkingConfig: { thinkingBudget: <span class="num">0</span> }
++ } <span class="cmt">as never,  // type not in SDK yet</span></span>
+})</div>
+      <p>Setting <code>thinkingBudget: 0</code> tells Gemini not to use thinking mode. No thinking → no <code>thought_signature</code> → the follow-up request is accepted and the agentic loop works.</p>
+    </div>
+  </div>
+
+  <!-- ── 5. Tradeoffs ── -->
+  <div class="section">
+    <h2>Tradeoff of the current fix</h2>
+    <div class="tradeoff">
+      <div class="tradeoff-card pro">
+        <h4>What we gain</h4>
+        <p>The agentic loop works. Gemini generates a real text response after calling <code>save_english_mistake</code>. No more empty bubbles or 400 errors.</p>
+      </div>
+      <div class="tradeoff-card con">
+        <h4>What we give up</h4>
+        <p>Deep internal reasoning before answering. For everyday chat this is negligible — the model still answers correctly, just without the extra scratch work.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. Future: loop WITH thinking ── -->
+  <div class="section">
+    <h2>Future — can we use the loop WITH thinking enabled?</h2>
+
+    <div style="background:#1e2433;border:1px solid #2d3748;border-radius:10px;padding:20px 24px;margin-bottom:20px;">
+      <p style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">
+        Yes — but you have to <strong style="color:#f8fafc">bypass the SDK's built-in chat history</strong> and manage history yourself.
+        The SDK's <code>ChatSession</code> is the only thing that loses <span class="thought-sig">thought_signature</span>.
+        The raw API is fine with it, so if you build the request manually you get both thinking <em>and</em> the loop.
+      </p>
+    </div>
+
+    <h2 style="margin-bottom:12px;">How — SDK chat vs manual history</h2>
+    <div class="json-grid" style="margin-bottom:20px;">
+
+      <div class="json-block bad">
+        <div class="json-header">Current approach (SDK chat) — drops signature</div>
+        <div class="json-body" style="font-size:0.74rem;"><span class="miss">// SDK manages history internally</span>
+<span class="miss">// but strips thought_signature</span>
+
+<span class="key">const</span> chat = model.<span class="key">startChat</span>({ history })
+
+<span class="miss">// Turn 1</span>
+<span class="key">const</span> r1 = <span class="key">await</span> chat
+  .<span class="key">sendMessageStream</span>(userMessage)
+
+<span class="miss">// Turn 2 — SDK history is broken here</span>
+<span class="miss">// ↑ thought_signature already lost</span>
+<span class="key">const</span> r2 = <span class="key">await</span> chat
+  .<span class="key">sendMessageStream</span>([
+    { <span class="key">functionResponse</span>: ... }
+  ])
+<span class="miss">// → 400 Bad Request</span></div>
+      </div>
+
+      <div class="json-block good">
+        <div class="json-header">Manual history — preserves signature</div>
+        <div class="json-body" style="font-size:0.74rem;"><span class="fix">// You own the history array</span>
+<span class="fix">// Raw parts keep every field</span>
+
+<span class="key">const</span> history: unknown[] = [
+  ...previousMessages,
+  { <span class="key">role</span>: <span class="str">'user'</span>,
+    <span class="key">parts</span>: [{ <span class="key">text</span>: userMessage }] },
+]
+
+<span class="fix">// Turn 1 — low-level API</span>
+<span class="key">const</span> r1 = <span class="key">await</span> model
+  .<span class="key">generateContentStream</span>(
+    { contents: history } <span class="key">as never</span>
+  )
+
+<span class="fix">// Collect raw parts (thought_signature intact)</span>
+<span class="key">const</span> modelParts: unknown[] = []
+<span class="key">for await</span> (<span class="key">const</span> chunk <span class="key">of</span> r1.stream) {
+  <span class="key">for</span> (<span class="key">const</span> part <span class="key">of</span>
+    (chunk <span class="key">as any</span>).candidates
+      ?.[<span class="num">0</span>]?.content?.parts ?? []) {
+    modelParts.<span class="key">push</span>(part) <span class="fix">// ← raw, keeps sig</span>
+  }
+}
+
+<span class="fix">// Append model turn with signature preserved</span>
+history.<span class="key">push</span>(
+  { <span class="key">role</span>: <span class="str">'model'</span>, <span class="key">parts</span>: modelParts }
+)
+
+<span class="fix">// Append function response turn</span>
+history.<span class="key">push</span>({
+  <span class="key">role</span>: <span class="str">'user'</span>,
+  <span class="key">parts</span>: [{
+    <span class="key">functionResponse</span>: {
+      <span class="key">name</span>: <span class="str">'save_english_mistake'</span>,
+      <span class="key">response</span>: { <span class="key">result</span>: <span class="str">'saved'</span> }
+    }
+  }]
+})
+
+<span class="fix">// Turn 2 — history has thought_signature</span>
+<span class="key">const</span> r2 = <span class="key">await</span> model
+  .<span class="key">generateContentStream</span>(
+    { contents: history } <span class="key">as never</span>
+  )
+<span class="fix">// → works! text response streams normally</span></div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-bottom:12px;">Comparison</h2>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+        <thead>
+          <tr style="border-bottom:1px solid #2d3748;">
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;"></th>
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">SDK chat<br><span style="color:#f87171;text-transform:none;font-weight:400">current</span></th>
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Manual history<br><span style="color:#86efac;text-transform:none;font-weight:400">future option</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #1e2433;">
+            <td style="padding:10px 16px;color:#94a3b8;">Thinking mode</td>
+            <td style="padding:10px 16px;color:#fca5a5;">Disabled (thinkingBudget: 0)</td>
+            <td style="padding:10px 16px;color:#86efac;">Can be enabled</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2433;">
+            <td style="padding:10px 16px;color:#94a3b8;">thought_signature</td>
+            <td style="padding:10px 16px;color:#86efac;">Not generated (no issue)</td>
+            <td style="padding:10px 16px;color:#86efac;">Generated and preserved</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2433;">
+            <td style="padding:10px 16px;color:#94a3b8;">Agentic loop</td>
+            <td style="padding:10px 16px;color:#86efac;">Works</td>
+            <td style="padding:10px 16px;color:#86efac;">Works</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2433;">
+            <td style="padding:10px 16px;color:#94a3b8;">Code complexity</td>
+            <td style="padding:10px 16px;color:#86efac;">Simple</td>
+            <td style="padding:10px 16px;color:#fca5a5;">More verbose (manual history)</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 16px;color:#94a3b8;">When to use</td>
+            <td style="padding:10px 16px;color:#94a3b8;">Most chat use cases</td>
+            <td style="padding:10px 16px;color:#94a3b8;">If you need the model to reason deeply before calling functions</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</body>
+</html>
