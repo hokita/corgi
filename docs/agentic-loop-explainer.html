@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Loop Fix — English Mistake Detection</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      padding: 48px 24px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 48px;
+      font-size: 0.95rem;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.8rem;
+    }
+
+    .section {
+      margin-bottom: 48px;
+    }
+
+    /* ── Flow diagram ── */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .flow-col {
+      background: #1e2433;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid #2d3748;
+    }
+
+    .flow-col h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .flow-col.bad h3  { background: #7f1d1d; color: #fca5a5; }
+    .flow-col.good h3 { background: #14532d; color: #86efac; }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .bad  .step-num { background: #7f1d1d; color: #fca5a5; }
+    .good .step-num { background: #14532d; color: #86efac; }
+
+    .step-body {
+      font-size: 0.9rem;
+    }
+
+    .step-body strong {
+      display: block;
+      color: #f1f5f9;
+      margin-bottom: 2px;
+    }
+
+    .step-body span {
+      color: #94a3b8;
+      font-size: 0.82rem;
+    }
+
+    .arrow {
+      text-align: center;
+      color: #475569;
+      margin: 4px 0 4px 12px;
+      font-size: 1.1rem;
+    }
+
+    .highlight-step {
+      background: #1a3a2a;
+      border: 1px solid #166534;
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    .highlight-step .step-num { background: #166534; color: #bbf7d0; }
+
+    /* ── Code diff ── */
+    .diff-block {
+      background: #161b27;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2d3748;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.8rem;
+    }
+
+    .diff-header {
+      background: #1e2433;
+      padding: 8px 16px;
+      font-size: 0.75rem;
+      color: #64748b;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .diff-line {
+      padding: 2px 16px;
+      white-space: pre;
+    }
+
+    .diff-line.ctx  { color: #94a3b8; }
+    .diff-line.add  { background: #0d2818; color: #86efac; }
+    .diff-line.cmt  { color: #475569; font-style: italic; }
+
+    /* ── TDD badge row ── */
+    .tdd-row {
+      display: flex;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .tdd-card {
+      flex: 1;
+      background: #1e2433;
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid #2d3748;
+    }
+
+    .tdd-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+
+    .tdd-badge.red   { background: #7f1d1d; color: #fca5a5; }
+    .tdd-badge.green { background: #14532d; color: #86efac; }
+
+    .tdd-card p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+
+    .code-snippet {
+      background: #0d1117;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .code-snippet .kw  { color: #c792ea; }
+    .code-snippet .fn  { color: #82aaff; }
+    .code-snippet .str { color: #c3e88d; }
+    .code-snippet .cmt { color: #546e7a; }
+    .code-snippet .ok  { color: #86efac; }
+
+    /* ── Result box ── */
+    .result-box {
+      background: #0d2818;
+      border: 1px solid #166534;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+
+    .result-box p { font-size: 0.9rem; color: #86efac; }
+    .result-box .label { font-size: 0.75rem; color: #4ade80; font-weight: 600; margin-bottom: 6px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .flow-grid, .tdd-row { grid-template-columns: 1fr; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Agentic Loop Fix</h1>
+  <p class="subtitle">Why Gemini returned an empty response — and how the loop fixes it</p>
+
+  <!-- ── 1. The problem vs the fix ── -->
+  <div class="section">
+    <h2>What changed</h2>
+    <div class="flow-grid">
+
+      <!-- BEFORE -->
+      <div class="flow-col bad">
+        <h3>Before — broken</h3>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>User sends English message</strong>
+            <span>"I go to school yesterday."</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Gemini decides to call a function</strong>
+            <span>Calls <code>save_english_mistake</code> — uses its entire response turn for the function call, generates no text</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Backend saves mistake to Firestore</strong>
+            <span>Stream ends. <code>fullText = ""</code></span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>User sees empty bubble</strong>
+            <span>An empty assistant message is saved and displayed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AFTER -->
+      <div class="flow-col good">
+        <h3>After — fixed</h3>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>User sends English message</strong>
+            <span>"I go to school yesterday."</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Gemini calls the function (no text yet)</strong>
+            <span>Provider intercepts it, saves <code>save_english_mistake</code> to queue, yields StreamItem to route</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step highlight-step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Provider sends function result back</strong>
+            <span><em>New step.</em> Because <code>hasText = false</code>, provider calls <code>sendMessageStream([{ functionResponse: ... }])</code> — tells Gemini the function succeeded</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>Gemini generates its text response</strong>
+            <span>Streamed and yielded normally</span>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <strong>User sees a real reply</strong>
+            <span>Mistake saved silently; conversation continues naturally</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 2. Key logic ── -->
+  <div class="section">
+    <h2>Key logic in GeminiProvider.ts</h2>
+    <div class="diff-block">
+      <div class="diff-header">backend/src/providers/GeminiProvider.ts — chatStream()</div>
+
+      <div class="diff-line ctx">    let suggestOptionsItems: string[] | undefined</div>
+      <div class="diff-line add">+   let hasText = false</div>
+      <div class="diff-line add">+   const pendingFunctionResponses = []</div>
+      <div class="diff-line ctx"> </div>
+      <div class="diff-line ctx">    for await (const chunk of result.stream) {</div>
+      <div class="diff-line ctx">      // ... detect function calls ...</div>
+      <div class="diff-line ctx">      } else if (name === 'save_english_mistake') {</div>
+      <div class="diff-line ctx">          yield { type: 'save_english_mistake', data: args }</div>
+      <div class="diff-line add">+         pendingFunctionResponses.push(</div>
+      <div class="diff-line add">+           { name: 'save_english_mistake', response: { result: 'saved' } }</div>
+      <div class="diff-line add">+         )</div>
+      <div class="diff-line ctx">      }</div>
+      <div class="diff-line ctx">      if (!hasFunctionCall) {</div>
+      <div class="diff-line ctx">        const text = chunk.text()</div>
+      <div class="diff-line add">+       if (text) { hasText = true; yield text }</div>
+      <div class="diff-line ctx">      }</div>
+      <div class="diff-line ctx">    }</div>
+      <div class="diff-line ctx"> </div>
+      <div class="diff-line add">+   // Only loop if Gemini produced function call(s) but no text</div>
+      <div class="diff-line add">+   if (pendingFunctionResponses.length > 0 &amp;&amp; !hasText) {</div>
+      <div class="diff-line add">+     const followUp = await chat.sendMessageStream(</div>
+      <div class="diff-line add">+       pendingFunctionResponses.map(r =&gt; ({ functionResponse: r }))</div>
+      <div class="diff-line add">+     )</div>
+      <div class="diff-line add">+     for await (const chunk of followUp.stream) {</div>
+      <div class="diff-line add">+       // yield text (and handle suggest_options) from follow-up</div>
+      <div class="diff-line add">+     }</div>
+      <div class="diff-line add">+   }</div>
+    </div>
+  </div>
+
+  <!-- ── 3. TDD ── -->
+  <div class="section">
+    <h2>How it was written — Red / Green TDD</h2>
+    <div class="tdd-row">
+
+      <div class="tdd-card">
+        <span class="tdd-badge red">RED — failing test first</span>
+        <p>Wrote the test before touching <code>GeminiProvider.ts</code>. Two mock streams: one returns only a function call, the next returns text.</p>
+        <div class="code-snippet"><span class="kw">it</span>(<span class="str">'sends function result back and yields text when
+  Gemini only calls save_english_mistake with no text'</span>, <span class="kw">async</span> () =&gt; {
+  mockSendMessageStream
+    .<span class="fn">mockResolvedValueOnce</span>({ stream: <span class="fn">firstStream</span>() })   <span class="cmt">// fn call only</span>
+    .<span class="fn">mockResolvedValueOnce</span>({ stream: <span class="fn">followUpStream</span>() }) <span class="cmt">// text</span>
+
+  <span class="kw">const</span> items = <span class="kw">await</span> <span class="fn">collectStream</span>(provider.<span class="fn">chatStream</span>(...))
+
+  <span class="fn">expect</span>(items).<span class="fn">toEqual</span>([
+    { type: <span class="str">'save_english_mistake'</span>, data: mistakeData },
+    <span class="str">'Great effort! Keep practicing.'</span>,
+  ])
+  <span class="fn">expect</span>(mockSendMessageStream).<span class="fn">toHaveBeenCalledTimes</span>(<span class="ok">2</span>) <span class="cmt">// loop happened</span>
+})</div>
+      </div>
+
+      <div class="tdd-card">
+        <span class="tdd-badge green">GREEN — minimal implementation</span>
+        <p>Added <code>hasText</code> flag and <code>pendingFunctionResponses</code> queue. After the stream ends, if no text was generated, send results back and stream the follow-up.</p>
+        <div class="code-snippet"><span class="cmt">// After main stream loop:</span>
+<span class="kw">if</span> (pendingFunctionResponses.length &gt; <span class="ok">0</span> &amp;&amp; !hasText) {
+  <span class="kw">const</span> followUp = <span class="kw">await</span> chat
+    .<span class="fn">sendMessageStream</span>(
+      pendingFunctionResponses
+        .<span class="fn">map</span>(r =&gt; ({ functionResponse: r }))
+    )
+  <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> followUp.stream) {
+    <span class="cmt">// yield text from follow-up turn</span>
+  }
+}</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 4. Result ── -->
+  <div class="section">
+    <h2>Result</h2>
+    <div class="result-box">
+      <div class="label">All 35 tests pass</div>
+      <p>
+        When Gemini calls <code>save_english_mistake</code> with text in the same turn → no second call needed, works as before.<br>
+        When Gemini calls it with no text (the bug) → provider loops, Gemini replies, user sees a normal response.
+      </p>
+    </div>
+  </div>
+
+</body>
+</html>

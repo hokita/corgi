@@ -92,6 +92,8 @@ export class GeminiProvider implements AIProvider {
     const result = await chat.sendMessageStream(newMessage)
 
     let suggestOptionsItems: string[] | undefined
+    let hasText = false
+    const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
 
     for await (const chunk of result.stream) {
       let hasFunctionCall = false
@@ -108,13 +110,47 @@ export class GeminiProvider implements AIProvider {
             } else if (name === 'save_english_mistake') {
               hasFunctionCall = true
               yield { type: 'save_english_mistake', data: args as EnglishMistakeData }
+              pendingFunctionResponses.push({ name: 'save_english_mistake', response: { result: 'saved' } })
             }
           }
         }
       }
       if (!hasFunctionCall) {
         const text = chunk.text()
-        if (text) yield text
+        if (text) {
+          hasText = true
+          yield text
+        }
+      }
+    }
+
+    // If Gemini only called functions and generated no text, send function results
+    // back so Gemini produces its text response
+    if (pendingFunctionResponses.length > 0 && !hasText) {
+      const followUp = await chat.sendMessageStream(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pendingFunctionResponses.map((r) => ({ functionResponse: r })) as any
+      )
+      for await (const chunk of followUp.stream) {
+        let hasFunctionCall = false
+        for (const candidate of chunk.candidates ?? []) {
+          for (const part of candidate.content?.parts ?? []) {
+            if ('functionCall' in part) {
+              const { name, args } = part.functionCall as { name: string; args: unknown }
+              if (name === 'suggest_options') {
+                hasFunctionCall = true
+                const items = (args as { items?: string[] }).items
+                if (Array.isArray(items) && items.length > 0) {
+                  suggestOptionsItems = items
+                }
+              }
+            }
+          }
+        }
+        if (!hasFunctionCall) {
+          const text = chunk.text()
+          if (text) yield text
+        }
       }
     }
 

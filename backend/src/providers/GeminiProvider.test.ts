@@ -167,6 +167,44 @@ describe('GeminiProvider', () => {
     expect(items).toEqual(['Done.'])
   })
 
+  it('sends function result back and yields text when Gemini only calls save_english_mistake with no text', async () => {
+    const mistakeData = {
+      originalText: 'I go to school yesterday.',
+      correctedText: 'I went to school yesterday.',
+      category: 'grammar',
+      severity: 'medium',
+      patternKey: 'past_tense_for_past_action',
+    }
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'save_english_mistake', args: mistakeData } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => 'Great effort! Keep practicing.', candidates: undefined }
+    }
+    mockSendMessageStream
+      .mockResolvedValueOnce({ stream: firstStream() })
+      .mockResolvedValueOnce({ stream: followUpStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'I go to school yesterday.'))
+    expect(items).toEqual([
+      { type: 'save_english_mistake', data: mistakeData },
+      'Great effort! Keep practicing.',
+    ])
+    expect(mockSendMessageStream).toHaveBeenCalledTimes(2)
+    expect(mockSendMessageStream).toHaveBeenNthCalledWith(2, [
+      { functionResponse: { name: 'save_english_mistake', response: { result: 'saved' } } },
+    ])
+  })
+
   it('yields save_english_mistake item when Gemini calls save_english_mistake', async () => {
     const mistakeData = {
       originalText: 'I resolved the issue with downgrade of Node version.',
