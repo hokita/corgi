@@ -71,10 +71,6 @@ export class GeminiProvider implements AIProvider {
       model: 'gemini-3.5-flash',
       systemInstruction:
         'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English.',
-      // Disable thinking to avoid thought_signature on function calls — the SDK
-      // does not preserve thought_signature in chat history when streaming, so
-      // the follow-up sendMessageStream (agentic loop) fails with 400.
-      generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as never,
     })
   }
 
@@ -98,8 +94,16 @@ export class GeminiProvider implements AIProvider {
     let suggestOptionsItems: string[] | undefined
     let hasText = false
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
+    // Capture raw parts from the stream. The SDK's ChatSession strips
+    // thought_signature when merging chunks into its internal history, so we
+    // preserve the raw parts ourselves for use in the follow-up call.
+    const rawModelParts: unknown[] = []
 
     for await (const chunk of result.stream) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const part of (chunk as any).candidates?.[0]?.content?.parts ?? []) {
+        rawModelParts.push(part)
+      }
       let hasFunctionCall = false
       for (const candidate of chunk.candidates ?? []) {
         for (const part of candidate.content?.parts ?? []) {
@@ -129,15 +133,28 @@ export class GeminiProvider implements AIProvider {
     }
 
     // If Gemini only called functions and generated no text, send function results
-    // back so Gemini produces its text response
+    // back so Gemini produces its text response. Use model.generateContentStream
+    // with manually-built history (not chat.sendMessageStream) so the raw model
+    // parts — including thought_signature — are preserved in the request.
     if (pendingFunctionResponses.length > 0 && !hasText) {
-      const followUp = await chat.sendMessageStream(
+      const manualHistory = [
+        ...history.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        })),
+        { role: 'user', parts: [{ text: newMessage }] },
+        { role: 'model', parts: rawModelParts },
+        { role: 'user', parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })) },
+      ]
+      const followUp = await this.model.generateContentStream(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        pendingFunctionResponses.map((r) => ({ functionResponse: r })) as any
+        { contents: manualHistory, tools } as any
       )
-      for await (const chunk of followUp.stream) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for await (const chunk of followUp.stream as any) {
         let hasFunctionCall = false
-        for (const candidate of chunk.candidates ?? []) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const candidate of (chunk as any).candidates ?? []) {
           for (const part of candidate.content?.parts ?? []) {
             if ('functionCall' in part) {
               const { name, args } = part.functionCall as { name: string; args: unknown }
@@ -152,7 +169,8 @@ export class GeminiProvider implements AIProvider {
           }
         }
         if (!hasFunctionCall) {
-          const text = chunk.text()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const text = (chunk as any).text?.()
           if (text) yield text
         }
       }

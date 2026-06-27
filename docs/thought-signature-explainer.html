@@ -457,63 +457,27 @@
 
   <!-- ── 4. The fix ── -->
   <div class="section">
-    <h2>The fix</h2>
-    <div class="fix-box">
-      <div class="label">Solution — disable thinking mode</div>
-      <div class="fix-code"><span class="kw">this</span>.model = client.<span class="key">getGenerativeModel</span>({
-  <span class="key">model</span>: <span class="str">'gemini-3.5-flash'</span>,
-  <span class="key">systemInstruction</span>: <span class="str">'...'</span>,
-<span class="add">+ generationConfig: {
-+   thinkingConfig: { thinkingBudget: <span class="num">0</span> }
-+ } <span class="cmt">as never,  // type not in SDK yet</span></span>
-})</div>
-      <p>Setting <code>thinkingBudget: 0</code> tells Gemini not to use thinking mode. No thinking → no <code>thought_signature</code> → the follow-up request is accepted and the agentic loop works.</p>
-    </div>
-  </div>
+    <h2>The fix — hybrid approach</h2>
 
-  <!-- ── 5. Tradeoffs ── -->
-  <div class="section">
-    <h2>Tradeoff of the current fix</h2>
-    <div class="tradeoff">
-      <div class="tradeoff-card pro">
-        <h4>What we gain</h4>
-        <p>The agentic loop works. Gemini generates a real text response after calling <code>save_english_mistake</code>. No more empty bubbles or 400 errors.</p>
-      </div>
-      <div class="tradeoff-card con">
-        <h4>What we give up</h4>
-        <p>Deep internal reasoning before answering. For everyday chat this is negligible — the model still answers correctly, just without the extra scratch work.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 6. Future: loop WITH thinking ── -->
-  <div class="section">
-    <h2>Future — can we use the loop WITH thinking enabled?</h2>
-
-    <div style="background:#1e2433;border:1px solid #2d3748;border-radius:10px;padding:20px 24px;margin-bottom:20px;">
-      <p style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">
-        Yes — but you have to <strong style="color:#f8fafc">bypass the SDK's built-in chat history</strong> and manage history yourself.
-        The SDK's <code>ChatSession</code> is the only thing that loses <span class="thought-sig">thought_signature</span>.
-        The raw API is fine with it, so if you build the request manually you get both thinking <em>and</em> the loop.
-      </p>
+    <div style="background:#1e2433;border:1px solid #2d3748;border-radius:10px;padding:18px 24px;margin-bottom:20px;font-size:0.9rem;color:#cbd5e1;">
+      Keep <code>chat.sendMessageStream</code> for the <strong style="color:#f8fafc">first turn</strong> (works fine — no history manipulation).
+      For the <strong style="color:#f8fafc">follow-up turn</strong>, bypass <code>ChatSession</code> entirely and call
+      <code>model.generateContentStream</code> with a manually-built history that includes the
+      raw stream parts — <span class="thought-sig">thought_signature</span> intact.
     </div>
 
-    <h2 style="margin-bottom:12px;">How — SDK chat vs manual history</h2>
-    <div class="json-grid" style="margin-bottom:20px;">
+    <div class="json-grid" style="margin-bottom: 0">
 
       <div class="json-block bad">
-        <div class="json-header">Current approach (SDK chat) — drops signature</div>
-        <div class="json-body" style="font-size:0.74rem;"><span class="miss">// SDK manages history internally</span>
-<span class="miss">// but strips thought_signature</span>
-
-<span class="key">const</span> chat = model.<span class="key">startChat</span>({ history })
-
-<span class="miss">// Turn 1</span>
+        <div class="json-header">Before — chat.sendMessageStream for follow-up</div>
+        <div class="json-body" style="font-size:0.74rem;"><span class="miss">// Turn 1 — fine</span>
 <span class="key">const</span> r1 = <span class="key">await</span> chat
   .<span class="key">sendMessageStream</span>(userMessage)
 
-<span class="miss">// Turn 2 — SDK history is broken here</span>
-<span class="miss">// ↑ thought_signature already lost</span>
+<span class="miss">// SDK stores chunks in history</span>
+<span class="miss">// → thought_signature is dropped here</span>
+
+<span class="miss">// Turn 2 — history is already broken</span>
 <span class="key">const</span> r2 = <span class="key">await</span> chat
   .<span class="key">sendMessageStream</span>([
     { <span class="key">functionResponse</span>: ... }
@@ -522,96 +486,99 @@
       </div>
 
       <div class="json-block good">
-        <div class="json-header">Manual history — preserves signature</div>
-        <div class="json-body" style="font-size:0.74rem;"><span class="fix">// You own the history array</span>
-<span class="fix">// Raw parts keep every field</span>
+        <div class="json-header">After — model.generateContentStream for follow-up</div>
+        <div class="json-body" style="font-size:0.74rem;"><span class="fix">// Turn 1 — same as before</span>
+<span class="key">const</span> r1 = <span class="key">await</span> chat
+  .<span class="key">sendMessageStream</span>(userMessage)
 
-<span class="key">const</span> history: unknown[] = [
-  ...previousMessages,
-  { <span class="key">role</span>: <span class="str">'user'</span>,
-    <span class="key">parts</span>: [{ <span class="key">text</span>: userMessage }] },
-]
-
-<span class="fix">// Turn 1 — low-level API</span>
-<span class="key">const</span> r1 = <span class="key">await</span> model
-  .<span class="key">generateContentStream</span>(
-    { contents: history } <span class="key">as never</span>
-  )
-
-<span class="fix">// Collect raw parts (thought_signature intact)</span>
-<span class="key">const</span> modelParts: unknown[] = []
+<span class="fix">// Capture raw parts ourselves during streaming</span>
+<span class="fix">// → thought_signature is preserved in rawModelParts</span>
+<span class="key">const</span> rawModelParts: unknown[] = []
 <span class="key">for await</span> (<span class="key">const</span> chunk <span class="key">of</span> r1.stream) {
   <span class="key">for</span> (<span class="key">const</span> part <span class="key">of</span>
     (chunk <span class="key">as any</span>).candidates
       ?.[<span class="num">0</span>]?.content?.parts ?? []) {
-    modelParts.<span class="key">push</span>(part) <span class="fix">// ← raw, keeps sig</span>
+    rawModelParts.<span class="key">push</span>(part) <span class="fix">// raw → keeps sig</span>
   }
 }
 
-<span class="fix">// Append model turn with signature preserved</span>
-history.<span class="key">push</span>(
-  { <span class="key">role</span>: <span class="str">'model'</span>, <span class="key">parts</span>: modelParts }
-)
-
-<span class="fix">// Append function response turn</span>
-history.<span class="key">push</span>({
-  <span class="key">role</span>: <span class="str">'user'</span>,
-  <span class="key">parts</span>: [{
-    <span class="key">functionResponse</span>: {
-      <span class="key">name</span>: <span class="str">'save_english_mistake'</span>,
-      <span class="key">response</span>: { <span class="key">result</span>: <span class="str">'saved'</span> }
-    }
-  }]
-})
-
-<span class="fix">// Turn 2 — history has thought_signature</span>
+<span class="fix">// Turn 2 — bypass ChatSession, build history manually</span>
+<span class="key">const</span> manualHistory = [
+  ...previousMessages,
+  { <span class="key">role</span>: <span class="str">'user'</span>,
+    <span class="key">parts</span>: [{ <span class="key">text</span>: userMessage }] },
+  { <span class="key">role</span>: <span class="str">'model'</span>,
+    <span class="key">parts</span>: rawModelParts }, <span class="fix">// ← sig preserved!</span>
+  { <span class="key">role</span>: <span class="str">'user'</span>,
+    <span class="key">parts</span>: [{ <span class="key">functionResponse</span>: ... }] },
+]
 <span class="key">const</span> r2 = <span class="key">await</span> model
   .<span class="key">generateContentStream</span>(
-    { contents: history } <span class="key">as never</span>
+    { <span class="key">contents</span>: manualHistory } <span class="key">as any</span>
   )
-<span class="fix">// → works! text response streams normally</span></div>
+<span class="fix">// → Gemini sees thought_signature → 200 OK</span></div>
       </div>
 
     </div>
+  </div>
 
-    <h2 style="margin-bottom:12px;">Comparison</h2>
+  <!-- ── 5. Why this is better than the alternatives ── -->
+  <div class="section">
+    <h2>Why this approach — not the alternatives</h2>
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
         <thead>
-          <tr style="border-bottom:1px solid #2d3748;">
-            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;"></th>
-            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">SDK chat<br><span style="color:#f87171;text-transform:none;font-weight:400">current</span></th>
-            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Manual history<br><span style="color:#86efac;text-transform:none;font-weight:400">future option</span></th>
+          <tr style="border-bottom:2px solid #2d3748;">
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Option</th>
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Thinking</th>
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Loop works</th>
+            <th style="text-align:left;padding:10px 16px;color:#64748b;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Verdict</th>
           </tr>
         </thead>
         <tbody>
-          <tr style="border-bottom:1px solid #1e2433;">
-            <td style="padding:10px 16px;color:#94a3b8;">Thinking mode</td>
-            <td style="padding:10px 16px;color:#fca5a5;">Disabled (thinkingBudget: 0)</td>
-            <td style="padding:10px 16px;color:#86efac;">Can be enabled</td>
+          <tr style="border-bottom:1px solid #1e2433;background:#0d2818;">
+            <td style="padding:10px 16px;color:#86efac;font-weight:600;">A — Hybrid (this fix)</td>
+            <td style="padding:10px 16px;color:#86efac;">On</td>
+            <td style="padding:10px 16px;color:#86efac;">Yes</td>
+            <td style="padding:10px 16px;color:#86efac;">Fixes root cause. Best of both.</td>
           </tr>
           <tr style="border-bottom:1px solid #1e2433;">
-            <td style="padding:10px 16px;color:#94a3b8;">thought_signature</td>
-            <td style="padding:10px 16px;color:#86efac;">Not generated (no issue)</td>
-            <td style="padding:10px 16px;color:#86efac;">Generated and preserved</td>
+            <td style="padding:10px 16px;color:#94a3b8;">B — Drop SDK, use REST API</td>
+            <td style="padding:10px 16px;color:#86efac;">On</td>
+            <td style="padding:10px 16px;color:#86efac;">Yes</td>
+            <td style="padding:10px 16px;color:#fca5a5;">Correct but adds maintenance burden — you own SSE parsing, auth, retry.</td>
           </tr>
           <tr style="border-bottom:1px solid #1e2433;">
-            <td style="padding:10px 16px;color:#94a3b8;">Agentic loop</td>
-            <td style="padding:10px 16px;color:#86efac;">Works</td>
-            <td style="padding:10px 16px;color:#86efac;">Works</td>
-          </tr>
-          <tr style="border-bottom:1px solid #1e2433;">
-            <td style="padding:10px 16px;color:#94a3b8;">Code complexity</td>
-            <td style="padding:10px 16px;color:#86efac;">Simple</td>
-            <td style="padding:10px 16px;color:#fca5a5;">More verbose (manual history)</td>
+            <td style="padding:10px 16px;color:#94a3b8;">C — Change model to 2.0-flash</td>
+            <td style="padding:10px 16px;color:#fca5a5;">Off (no thinking model)</td>
+            <td style="padding:10px 16px;color:#86efac;">Yes</td>
+            <td style="padding:10px 16px;color:#f87171;">Workaround, not a fix. Downgrades model.</td>
           </tr>
           <tr>
-            <td style="padding:10px 16px;color:#94a3b8;">When to use</td>
-            <td style="padding:10px 16px;color:#94a3b8;">Most chat use cases</td>
-            <td style="padding:10px 16px;color:#94a3b8;">If you need the model to reason deeply before calling functions</td>
+            <td style="padding:10px 16px;color:#94a3b8;">D — thinkingBudget: 0</td>
+            <td style="padding:10px 16px;color:#fca5a5;">Disabled</td>
+            <td style="padding:10px 16px;color:#86efac;">Yes</td>
+            <td style="padding:10px 16px;color:#f87171;">Workaround. SDK ignores the config field at runtime anyway.</td>
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ── 6. Key insight ── -->
+  <div class="section">
+    <h2>Key insight</h2>
+    <div style="background:#1a1830;border:1px solid #4c1d95;border-radius:10px;padding:20px 24px;">
+      <p style="font-size:0.9rem;color:#c4b5fd;margin-bottom:10px;">
+        The SDK's <code>ChatSession</code> is the only broken piece.
+        <code>model.generateContentStream()</code> — a lower-level method on the same SDK —
+        just serialises whatever object you pass it directly to JSON and sends it to the API.
+        It has no history management, so nothing gets stripped.
+      </p>
+      <p style="font-size:0.9rem;color:#a78bfa;">
+        The fix uses <code>ChatSession</code> only for the first turn (where it works fine),
+        then drops to the lower level for the follow-up where precise history control matters.
+      </p>
     </div>
   </div>
 

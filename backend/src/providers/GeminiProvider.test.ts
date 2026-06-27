@@ -2,8 +2,12 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import type { StreamItem } from './AIProvider'
 
 const mockSendMessageStream = vi.fn()
+const mockGenerateContentStream = vi.fn()
 const mockStartChat = vi.fn(() => ({ sendMessageStream: mockSendMessageStream }))
-const mockGetGenerativeModel = vi.fn(() => ({ startChat: mockStartChat }))
+const mockGetGenerativeModel = vi.fn(() => ({
+  startChat: mockStartChat,
+  generateContentStream: mockGenerateContentStream,
+}))
 
 vi.mock('@google/generative-ai', () => ({
   GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
@@ -167,7 +171,7 @@ describe('GeminiProvider', () => {
     expect(items).toEqual(['Done.'])
   })
 
-  it('sends function result back and yields text when Gemini only calls save_english_mistake with no text', async () => {
+  it('sends function result back via generateContentStream to preserve thought_signature', async () => {
     const mistakeData = {
       originalText: 'I go to school yesterday.',
       correctedText: 'I went to school yesterday.',
@@ -175,34 +179,35 @@ describe('GeminiProvider', () => {
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
     }
+    const rawFunctionCallPart = {
+      functionCall: { name: 'save_english_mistake', args: mistakeData, thought_signature: 'abc123' },
+    }
     async function* firstStream() {
       yield {
         text: () => '',
-        candidates: [
-          {
-            content: {
-              parts: [{ functionCall: { name: 'save_english_mistake', args: mistakeData } }],
-            },
-          },
-        ],
+        candidates: [{ content: { parts: [rawFunctionCallPart] } }],
       }
     }
     async function* followUpStream() {
       yield { text: () => 'Great effort! Keep practicing.', candidates: undefined }
     }
-    mockSendMessageStream
-      .mockResolvedValueOnce({ stream: firstStream() })
-      .mockResolvedValueOnce({ stream: followUpStream() })
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
     const provider = new GeminiProvider('fake-key')
     const items = await collectStream(provider.chatStream([], 'I go to school yesterday.'))
     expect(items).toEqual([
       { type: 'save_english_mistake', data: mistakeData },
       'Great effort! Keep practicing.',
     ])
-    expect(mockSendMessageStream).toHaveBeenCalledTimes(2)
-    expect(mockSendMessageStream).toHaveBeenNthCalledWith(2, [
-      { functionResponse: { name: 'save_english_mistake', response: { result: 'saved' } } },
-    ])
+    // follow-up must use generateContentStream (not sendMessageStream) so that
+    // raw model parts (including thought_signature) are preserved in the history
+    expect(mockSendMessageStream).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
+    const followUpContents = (mockGenerateContentStream.mock.calls[0][0] as any).contents
+    const modelTurn = followUpContents.find((c: any) => c.role === 'model')
+    expect(modelTurn.parts[0]).toMatchObject({
+      functionCall: expect.objectContaining({ thought_signature: 'abc123' }),
+    })
   })
 
   it('yields save_english_mistake item when Gemini calls save_english_mistake', async () => {
