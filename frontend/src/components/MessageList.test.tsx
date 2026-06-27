@@ -75,4 +75,40 @@ describe('MessageList', () => {
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
   })
 
+  it('renders progress steps above the last assistant message', () => {
+    render(
+      <MessageList
+        messages={[msg('assistant', 'Hello')]}
+        progressSteps={['Analyzing your message...', 'Saving learning point...']}
+      />
+    )
+    expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
+    expect(screen.getByText('Saving learning point...')).toBeInTheDocument()
+  })
+
+  it('does not render progress steps when progressSteps is empty', () => {
+    render(
+      <MessageList
+        messages={[msg('assistant', 'Hello')]}
+        progressSteps={[]}
+      />
+    )
+    expect(screen.queryByText('Analyzing your message...')).toBeNull()
+  })
+
+  it('only renders progress steps for the last assistant message', () => {
+    render(
+      <MessageList
+        messages={[
+          msg('assistant', 'First reply'),
+          msg('user', 'Follow up'),
+          msg('assistant', 'Second reply'),
+        ]}
+        progressSteps={['Analyzing your message...']}
+      />
+    )
+    // Progress is rendered once (above last assistant), not for the first assistant message
+    expect(screen.getAllByText('Analyzing your message...')).toHaveLength(1)
+  })
+
 })

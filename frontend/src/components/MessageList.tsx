@@ -2,18 +2,20 @@ import { useEffect, useRef } from 'react'
 import type { Message } from '../types'
 import MarkdownMessage from './MarkdownMessage'
 import SuggestionButtons from './SuggestionButtons'
+import ThinkingProgress from './ThinkingProgress'
 
 interface Props {
   messages: Message[]
   onSuggestionClick?: (text: string) => void
+  progressSteps?: string[]
 }
 
-export default function MessageList({ messages, onSuggestionClick }: Props) {
+export default function MessageList({ messages, onSuggestionClick, progressSteps = [] }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, progressSteps])
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
@@ -24,12 +26,16 @@ export default function MessageList({ messages, onSuggestionClick }: Props) {
           hasFollowUp && m.suggestions?.includes(nextMsg.content)
             ? nextMsg.content
             : undefined
+        const isLastAssistant = i === messages.length - 1 && m.role === 'assistant'
 
         return (
           <div
             key={i}
             className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
           >
+            {isLastAssistant && progressSteps.length > 0 && (
+              <ThinkingProgress steps={progressSteps} />
+            )}
             <div
               className={`max-w-[80%] px-3.5 py-2.5 text-sm leading-relaxed break-words ${
                 m.role === 'user'

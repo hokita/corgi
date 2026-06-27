@@ -17,6 +17,7 @@ export default function ChatPage({ user }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
+  const [progressSteps, setProgressSteps] = useState<string[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function ChatPage({ user }: Props) {
 
   async function handleSend(text: string) {
     if (sending) return
+    setProgressSteps([])
     setSending(true)
     const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
     const placeholder: Message = {
@@ -60,6 +62,10 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
+    const onProgress = (msg: string) => {
+      setProgressSteps((prev) => [...prev, msg])
+    }
+
     const onError = () => {
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
@@ -83,6 +89,7 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
+          onProgress,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>
@@ -104,6 +111,7 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
+          onProgress,
           onDone: () => {
             setConversations((prev) =>
               prev.map((c) =>
@@ -162,7 +170,11 @@ export default function ChatPage({ user }: Props) {
           Start a conversation
         </div>
       ) : (
-        <MessageList messages={messages} onSuggestionClick={handleSend} />
+        <MessageList
+          messages={messages}
+          onSuggestionClick={handleSend}
+          progressSteps={sending ? progressSteps : []}
+        />
       )}
 
       <MessageInput onSend={handleSend} disabled={sending} />
