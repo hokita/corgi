@@ -253,4 +253,38 @@ describe('GeminiProvider', () => {
 
     expect(executeFn).toHaveBeenCalledWith('unknown_tool', {})
   })
+
+  it('executes non-suggest_options function calls in follow-up stream and yields text', async () => {
+    // Scenario: model calls save_english_mistake in the initial stream (no text),
+    // then in the follow-up the model calls save_english_mistake AGAIN before producing text.
+    // Previously hasFunctionCall was not set for non-suggest_options calls, causing
+    // chunk.text() to be called on a function-call chunk and the function to be ignored.
+    const mistakeData = { originalText: 'I go', correctedText: 'I went', category: 'grammar', severity: 'low', patternKey: 'past_tense' }
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [{ content: { parts: [{ functionCall: { name: 'save_english_mistake', args: mistakeData } }] } }],
+      }
+    }
+    async function* followUpStream() {
+      // Follow-up model calls save_english_mistake again, then produces text
+      yield {
+        text: () => '',
+        candidates: [{ content: { parts: [{ functionCall: { name: 'save_english_mistake', args: mistakeData } }] } }],
+      }
+      yield { text: () => 'Great job!', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'I go to school yesterday.', executeFn))
+
+    // executeFn called twice: once in first stream, once in follow-up stream
+    expect(executeFn).toHaveBeenCalledTimes(2)
+    expect(executeFn).toHaveBeenCalledWith('save_english_mistake', mistakeData)
+    // Text from follow-up is yielded correctly
+    expect(items).toContain('Great job!')
+  })
 })

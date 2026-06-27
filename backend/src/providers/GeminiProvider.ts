@@ -179,13 +179,15 @@ export class GeminiProvider implements AIProvider {
         for (const candidate of (chunk as any).candidates ?? []) {
           for (const part of candidate.content?.parts ?? []) {
             if ('functionCall' in part) {
+              hasFunctionCall = true
               const { name, args } = part.functionCall as { name: string; args: unknown }
               if (name === 'suggest_options') {
-                hasFunctionCall = true
                 const items = (args as { items?: string[] }).items
                 if (Array.isArray(items) && items.length > 0) {
                   suggestOptionsItems = items
                 }
+              } else {
+                await executeFn(name, args)
               }
             }
           }
