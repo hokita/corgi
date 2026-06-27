@@ -1,5 +1,5 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import type { EnglishMistakeData } from '../models/api'
+import type { EnglishMistakeData, EnglishMistakeDoc, GetMistakesParams } from '../models/api'
 
 export interface ConversationDoc {
   id: string
@@ -107,6 +107,48 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   messagesSnap.docs.forEach((d) => batch.delete(d.ref))
   batch.delete(db.collection('conversations').doc(conversationId))
   await batch.commit()
+}
+
+export async function listEnglishMistakes(
+  uid: string,
+  params: GetMistakesParams
+): Promise<EnglishMistakeDoc[]> {
+  const db = getFirestore()
+  let query = db
+    .collection('english_mistakes')
+    .where('uid', '==', uid)
+    .orderBy('createdAt', 'desc') as FirebaseFirestore.Query
+
+  if (params.startDate) {
+    query = query.where('createdAt', '>=', Timestamp.fromDate(new Date(params.startDate)))
+  }
+  if (params.endDate) {
+    const end = new Date(params.endDate)
+    end.setDate(end.getDate() + 1)
+    query = query.where('createdAt', '<', Timestamp.fromDate(end))
+  }
+
+  const snap = await query.limit(params.limit ?? 50).get()
+  let docs = snap.docs.map((d) => {
+    const data = d.data()
+    return {
+      id: d.id,
+      uid: data.uid as string,
+      conversationId: data.conversationId as string,
+      originalText: data.originalText as string,
+      correctedText: data.correctedText as string,
+      category: data.category as string,
+      severity: data.severity as string,
+      patternKey: data.patternKey as string,
+      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+    } as EnglishMistakeDoc
+  })
+
+  if (params.category) {
+    docs = docs.filter((d) => d.category === params.category)
+  }
+
+  return docs
 }
 
 export async function saveEnglishMistake(

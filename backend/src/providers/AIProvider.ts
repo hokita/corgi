@@ -1,5 +1,3 @@
-import type { EnglishMistakeData } from '../models/api'
-
 export interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -8,8 +6,9 @@ export interface Message {
 export type StreamItem =
   | string
   | { type: 'suggestions'; items: string[] }
-  | { type: 'save_english_mistake'; data: EnglishMistakeData }
+
+export type FunctionExecutor = (name: string, args: unknown) => Promise<unknown>
 
 export interface AIProvider {
-  chatStream(history: Message[], newMessage: string): AsyncIterable<StreamItem>
+  chatStream(history: Message[], newMessage: string, executeFn: FunctionExecutor): AsyncIterable<StreamItem>
 }

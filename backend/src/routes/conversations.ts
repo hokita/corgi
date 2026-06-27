@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import type { AIProvider } from '../providers/AIProvider'
+import type { AIProvider, FunctionExecutor } from '../providers/AIProvider'
 import type {
   CreateConversationRequest,
   SendMessageRequest,
@@ -7,11 +7,29 @@ import type {
   MessageResponse,
   SSEEvent,
   ErrorResponse,
+  EnglishMistakeData,
+  GetMistakesParams,
 } from '../models/api'
 import * as db from '../services/firestore'
 
 function writeSSE(res: import('express').Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
+}
+
+function makeExecutor(uid: string, conversationId: string, res: import('express').Response): FunctionExecutor {
+  return async (name: string, args: unknown) => {
+    if (name === 'save_english_mistake') {
+      await db.saveEnglishMistake(uid, conversationId, args as EnglishMistakeData)
+      writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
+      return { result: 'saved' }
+    }
+    if (name === 'get_english_mistakes') {
+      writeSSE(res, { type: 'progress', message: 'Fetching your mistakes...' })
+      const mistakes = await db.listEnglishMistakes(uid, args as GetMistakesParams)
+      return { mistakes }
+    }
+    return { error: 'unknown function' }
+  }
 }
 
 export function createConversationsRouter(ai: AIProvider): Router {
@@ -36,18 +54,17 @@ export function createConversationsRouter(ai: AIProvider): Router {
       writeSSE(res, { type: 'meta', conversationId, title })
       writeSSE(res, { type: 'progress', message: 'Analyzing your message...' })
 
+      const executeFn = makeExecutor(uid, conversationId, res)
+
       let fullText = ''
       let suggestions: string[] | undefined
-      for await (const item of ai.chatStream([], message)) {
+      for await (const item of ai.chatStream([], message, executeFn)) {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
-        } else if (item.type === 'save_english_mistake') {
-          await db.saveEnglishMistake(uid, conversationId, item.data)
-          writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
         }
       }
       await db.addMessage(conversationId, 'assistant', fullText, suggestions)
@@ -90,18 +107,17 @@ export function createConversationsRouter(ai: AIProvider): Router {
 
       writeSSE(res, { type: 'progress', message: 'Analyzing your message...' })
 
+      const executeFn = makeExecutor(uid, id, res)
+
       let fullText = ''
       let suggestions: string[] | undefined
-      for await (const item of ai.chatStream(aiHistory, message)) {
+      for await (const item of ai.chatStream(aiHistory, message, executeFn)) {
         if (typeof item === 'string') {
           fullText += item
           writeSSE(res, { type: 'chunk', text: item })
         } else if (item.type === 'suggestions') {
           suggestions = item.items
           writeSSE(res, { type: 'suggestions', items: item.items })
-        } else if (item.type === 'save_english_mistake') {
-          await db.saveEnglishMistake(uid, id, item.data)
-          writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
         }
       }
       await db.addMessage(id, 'assistant', fullText, suggestions)

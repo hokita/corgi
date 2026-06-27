@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
-import type { AIProvider } from '../providers/AIProvider'
+import type { AIProvider, FunctionExecutor } from '../providers/AIProvider'
 import type { StreamItem } from '../providers/AIProvider'
 
 vi.mock('../services/firestore', () => ({
@@ -33,6 +33,7 @@ vi.mock('../services/firestore', () => ({
   updateConversationLastMessage: vi.fn().mockResolvedValue(undefined),
   deleteConversation: vi.fn().mockResolvedValue(undefined),
   saveEnglishMistake: vi.fn().mockResolvedValue(undefined),
+  listEnglishMistakes: vi.fn().mockResolvedValue([]),
 }))
 
 import { createConversationsRouter } from './conversations'
@@ -42,8 +43,13 @@ async function* defaultStream() {
   yield 'AI reply'
 }
 
+let capturedExecuteFn: FunctionExecutor | undefined
+
 const mockAI: AIProvider = {
-  chatStream: vi.fn().mockReturnValue(defaultStream()),
+  chatStream: vi.fn().mockImplementation((_history, _msg, executeFn: FunctionExecutor) => {
+    capturedExecuteFn = executeFn
+    return defaultStream()
+  }),
 }
 
 function mockAuth(req: Request, _: Response, next: NextFunction) {
@@ -57,7 +63,11 @@ app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI))
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(mockAI.chatStream).mockReturnValue(defaultStream())
+  capturedExecuteFn = undefined
+  vi.mocked(mockAI.chatStream).mockImplementation((_history, _msg, executeFn: FunctionExecutor) => {
+    capturedExecuteFn = executeFn
+    return defaultStream()
+  })
 })
 
 function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }> {
@@ -69,11 +79,13 @@ function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }>
 
 describe('POST /api/conversations', () => {
   it('streams meta, chunk, and done events', async () => {
-    async function* stream() {
-      yield 'Hello'
-      yield ' world'
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        yield 'Hello'
+        yield ' world'
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations')
       .send({ message: 'Hello world' })
@@ -102,21 +114,25 @@ describe('POST /api/conversations', () => {
   })
 
   it('saves full accumulated assistant message to Firestore', async () => {
-    async function* stream() {
-      yield 'Hello'
-      yield ' world'
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        yield 'Hello'
+        yield ' world'
+      })()
+    })
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
     expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Here are your options:'
-      yield { type: 'suggestions', items: ['Yes', 'No'] }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* (): AsyncIterable<StreamItem> {
+        yield 'Here are your options:'
+        yield { type: 'suggestions', items: ['Yes', 'No'] }
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations')
       .send({ message: 'Give me options' })
@@ -126,11 +142,13 @@ describe('POST /api/conversations', () => {
   })
 
   it('saves suggestions to Firestore with assistant message', async () => {
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Choose:'
-      yield { type: 'suggestions', items: ['Yes', 'No'] }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* (): AsyncIterable<StreamItem> {
+        yield 'Choose:'
+        yield { type: 'suggestions', items: ['Yes', 'No'] }
+      })()
+    })
     await request(app)
       .post('/api/conversations')
       .send({ message: 'Give me options' })
@@ -151,7 +169,7 @@ describe('POST /api/conversations', () => {
     expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
   })
 
-  it('saves english mistake and emits progress when AI yields save_english_mistake', async () => {
+  it('executor saves english mistake to Firestore and returns saved result', async () => {
     const mistakeData = {
       originalText: 'I go to school yesterday.',
       correctedText: 'I went to school yesterday.',
@@ -159,27 +177,69 @@ describe('POST /api/conversations', () => {
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
     }
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Good effort!'
-      yield { type: 'save_english_mistake', data: mistakeData }
+    await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
+    const result = await capturedExecuteFn!('save_english_mistake', mistakeData)
+    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
+    expect(result).toEqual({ result: 'saved' })
+  })
+
+  it('executor emits progress SSE when saving english mistake', async () => {
+    const mistakeData = {
+      originalText: 'I go to school yesterday.',
+      correctedText: 'I went to school yesterday.',
+      category: 'grammar',
+      severity: 'medium',
+      patternKey: 'past_tense_for_past_action',
     }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        await executeFn('save_english_mistake', mistakeData)
+        yield 'Good effort!'
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations')
       .send({ message: 'I go to school yesterday.' })
       .buffer(true)
-    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
     const events = parseSSE(res.text)
     expect(events).toContainEqual({ type: 'progress', message: 'Saving learning point...' })
+  })
+
+  it('executor fetches mistakes from Firestore when called with get_english_mistakes', async () => {
+    const mockMistakes = [{ id: 'm1', originalText: 'I go', correctedText: 'I went', category: 'grammar', severity: 'medium', patternKey: 'past_tense', uid: 'u1', conversationId: 'conv123', createdAt: '2026-06-27T00:00:00.000Z' }]
+    vi.mocked(firestoreService.listEnglishMistakes).mockResolvedValueOnce(mockMistakes)
+    await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
+    const result = await capturedExecuteFn!('get_english_mistakes', { startDate: '2026-06-27', category: 'grammar' })
+    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', { startDate: '2026-06-27', category: 'grammar' })
+    expect(result).toEqual({ mistakes: mockMistakes })
+  })
+
+  it('executor emits progress SSE when fetching mistakes', async () => {
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        await executeFn('get_english_mistakes', {})
+        yield 'Here are your mistakes.'
+      })()
+    })
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Show my mistakes' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({ type: 'progress', message: 'Fetching your mistakes...' })
   })
 })
 
 describe('POST /api/conversations/:id/messages', () => {
   it('streams chunk and done events', async () => {
-    async function* stream() {
-      yield 'AI reply'
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        yield 'AI reply'
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
@@ -207,11 +267,13 @@ describe('POST /api/conversations/:id/messages', () => {
   })
 
   it('saves full accumulated assistant message to Firestore', async () => {
-    async function* stream() {
-      yield 'Hello'
-      yield ' world'
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        yield 'Hello'
+        yield ' world'
+      })()
+    })
     await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
@@ -220,11 +282,13 @@ describe('POST /api/conversations/:id/messages', () => {
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Pick one:'
-      yield { type: 'suggestions', items: ['Option A', 'Option B'] }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* (): AsyncIterable<StreamItem> {
+        yield 'Pick one:'
+        yield { type: 'suggestions', items: ['Option A', 'Option B'] }
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Give me options' })
@@ -234,11 +298,13 @@ describe('POST /api/conversations/:id/messages', () => {
   })
 
   it('saves suggestions to Firestore with assistant message', async () => {
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Choose:'
-      yield { type: 'suggestions', items: ['Option A', 'Option B'] }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* (): AsyncIterable<StreamItem> {
+        yield 'Choose:'
+        yield { type: 'suggestions', items: ['Option A', 'Option B'] }
+      })()
+    })
     await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Give me options' })
@@ -259,7 +325,7 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
   })
 
-  it('saves english mistake and emits progress when AI yields save_english_mistake', async () => {
+  it('executor saves english mistake to Firestore and returns saved result', async () => {
     const mistakeData = {
       originalText: 'I go to school yesterday.',
       correctedText: 'I went to school yesterday.',
@@ -267,18 +333,27 @@ describe('POST /api/conversations/:id/messages', () => {
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
     }
-    async function* stream(): AsyncIterable<StreamItem> {
-      yield 'Good effort!'
-      yield { type: 'save_english_mistake', data: mistakeData }
-    }
-    vi.mocked(mockAI.chatStream).mockReturnValue(stream())
+    await request(app).post('/api/conversations/conv123/messages').send({ message: 'Hi' }).buffer(true)
+    const result = await capturedExecuteFn!('save_english_mistake', mistakeData)
+    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
+    expect(result).toEqual({ result: 'saved' })
+  })
+
+  it('executor fetches mistakes and emits progress for get_english_mistakes', async () => {
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        await executeFn('get_english_mistakes', { startDate: '2026-06-27' })
+        yield 'Here are your mistakes.'
+      })()
+    })
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
-      .send({ message: 'I go to school yesterday.' })
+      .send({ message: 'Show mistakes' })
       .buffer(true)
-    expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
+    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', { startDate: '2026-06-27' })
     const events = parseSSE(res.text)
-    expect(events).toContainEqual({ type: 'progress', message: 'Saving learning point...' })
+    expect(events).toContainEqual({ type: 'progress', message: 'Fetching your mistakes...' })
   })
 })
 

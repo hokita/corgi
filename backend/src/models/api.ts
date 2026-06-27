@@ -33,6 +33,21 @@ export interface EnglishMistakeData {
   patternKey: string
 }
 
+// GET /api/english-mistakes (or via function calling)
+export interface EnglishMistakeDoc extends EnglishMistakeData {
+  id: string
+  uid: string
+  conversationId: string
+  createdAt: string
+}
+
+export interface GetMistakesParams {
+  startDate?: string
+  endDate?: string
+  category?: string
+  limit?: number
+}
+
 // SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
 export type SSEEvent =
   | { type: 'meta'; conversationId: string; title: string }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
-import type { StreamItem } from './AIProvider'
+import type { StreamItem, FunctionExecutor } from './AIProvider'
 
 const mockSendMessageStream = vi.fn()
 const mockGenerateContentStream = vi.fn()
@@ -22,6 +22,8 @@ vi.mock('@google/generative-ai', () => ({
 
 import { GeminiProvider } from './GeminiProvider'
 
+const noopExecutor: FunctionExecutor = vi.fn().mockResolvedValue({})
+
 async function collectStream(stream: AsyncIterable<StreamItem>): Promise<StreamItem[]> {
   const items: StreamItem[] = []
   for await (const item of stream) items.push(item)
@@ -38,7 +40,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'Hi'))
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(items).toEqual(['Hello', ' world'])
   })
 
@@ -54,7 +56,8 @@ describe('GeminiProvider', () => {
           { role: 'user', content: 'first message' },
           { role: 'assistant', content: 'first reply' },
         ],
-        'second message'
+        'second message',
+        noopExecutor
       )
     )
     expect(mockStartChat).toHaveBeenCalledWith(
@@ -75,7 +78,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'Hi'))
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(items).toEqual(['Hello', ' world'])
   })
 
@@ -102,7 +105,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'Give me options'))
+    const items = await collectStream(provider.chatStream([], 'Give me options', noopExecutor))
     expect(items).toEqual([
       'Here are your options.',
       { type: 'suggestions', items: ['Yes', 'No', 'Maybe'] },
@@ -115,7 +118,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key', { googleSearch: true })
-    await collectStream(provider.chatStream([], 'search something'))
+    await collectStream(provider.chatStream([], 'search something', noopExecutor))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.arrayContaining([{ googleSearch: {} }]),
@@ -129,7 +132,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key', { googleSearch: false })
-    await collectStream(provider.chatStream([], 'search something'))
+    await collectStream(provider.chatStream([], 'search something', noopExecutor))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.not.arrayContaining([{ googleSearch: {} }]),
@@ -143,7 +146,7 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
-    await collectStream(provider.chatStream([], 'search something'))
+    await collectStream(provider.chatStream([], 'search something', noopExecutor))
     expect(mockStartChat).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.not.arrayContaining([{ googleSearch: {} }]),
@@ -151,27 +154,7 @@ describe('GeminiProvider', () => {
     )
   })
 
-  it('ignores unknown function calls', async () => {
-    async function* fakeStream() {
-      yield { text: () => 'Done.', candidates: undefined }
-      yield {
-        text: () => '',
-        candidates: [
-          {
-            content: {
-              parts: [{ functionCall: { name: 'unknown_tool', args: {} } }],
-            },
-          },
-        ],
-      }
-    }
-    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
-    const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'Hi'))
-    expect(items).toEqual(['Done.'])
-  })
-
-  it('sends function result back via generateContentStream to preserve thought_signature', async () => {
+  it('calls executeFn for save_english_mistake and uses result in follow-up', async () => {
     const mistakeData = {
       originalText: 'I go to school yesterday.',
       correctedText: 'I went to school yesterday.',
@@ -193,61 +176,81 @@ describe('GeminiProvider', () => {
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'I go to school yesterday.'))
-    expect(items).toEqual([
-      { type: 'save_english_mistake', data: mistakeData },
-      'Great effort! Keep practicing.',
-    ])
-    // follow-up must use generateContentStream (not sendMessageStream) so that
-    // raw model parts (including thought_signature) are preserved in the history
+    const items = await collectStream(provider.chatStream([], 'I go to school yesterday.', executeFn))
+
+    expect(executeFn).toHaveBeenCalledWith('save_english_mistake', mistakeData)
+    expect(items).toEqual(['Great effort! Keep practicing.'])
     expect(mockSendMessageStream).toHaveBeenCalledTimes(1)
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
     type ContentTurn = { role: string; parts: unknown[] }
     const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
     const modelTurn = followUpArg.contents.find((c) => c.role === 'model')
-    expect(modelTurn.parts[0]).toMatchObject({
+    expect(modelTurn!.parts[0]).toMatchObject({
       functionCall: expect.objectContaining({ thought_signature: 'abc123' }),
     })
   })
 
-  it('yields save_english_mistake item when Gemini calls save_english_mistake', async () => {
-    const mistakeData = {
-      originalText: 'I resolved the issue with downgrade of Node version.',
-      correctedText: 'I resolved the issue by downgrading the Node version.',
-      category: 'grammar',
-      severity: 'medium',
-      patternKey: 'by_gerund_for_method',
-    }
-    async function* fakeStream() {
-      yield { text: () => 'Great effort!', candidates: undefined }
+  it('calls executeFn for get_english_mistakes and uses result in follow-up', async () => {
+    const queryArgs = { startDate: '2026-06-27', category: 'grammar' }
+    const mistakes = [{ id: 'm1', originalText: 'I go', correctedText: 'I went' }]
+    async function* firstStream() {
       yield {
         text: () => '',
         candidates: [
           {
             content: {
-              parts: [
-                {
-                  functionCall: {
-                    name: 'save_english_mistake',
-                    args: mistakeData,
-                  },
-                },
-              ],
+              parts: [{ functionCall: { name: 'get_english_mistakes', args: queryArgs } }],
             },
           },
         ],
       }
     }
-    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    async function* followUpStream() {
+      yield { text: () => 'Here are your mistakes for today.', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ mistakes })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(
-      provider.chatStream([], 'I resolved the issue with downgrade of Node version.')
+    const items = await collectStream(provider.chatStream([], 'Show my mistakes', executeFn))
+
+    expect(executeFn).toHaveBeenCalledWith('get_english_mistakes', queryArgs)
+    expect(items).toEqual(['Here are your mistakes for today.'])
+    type ContentTurn = { role: string; parts: unknown[] }
+    const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
+    const allParts = followUpArg.contents.flatMap((c) => c.parts)
+    expect(allParts).toContainEqual(
+      expect.objectContaining({ functionResponse: expect.objectContaining({ name: 'get_english_mistakes' }) })
     )
-    expect(items).toEqual([
-      'Great effort!',
-      { type: 'save_english_mistake', data: mistakeData },
-    ])
   })
 
+  it('calls executeFn for unknown function calls', async () => {
+    async function* fakeStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'unknown_tool', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => 'Done.', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: fakeStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ error: 'unknown function' })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', executeFn))
+
+    expect(executeFn).toHaveBeenCalledWith('unknown_tool', {})
+  })
 })
