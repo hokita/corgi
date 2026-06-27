@@ -24,11 +24,21 @@ export interface MessageResponse {
   suggestions?: string[]
 }
 
+// Shared shape for an English learning record
+export interface EnglishMistakeData {
+  originalText: string
+  correctedText: string
+  category: string
+  severity: string
+  patternKey: string
+}
+
 // SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
 export type SSEEvent =
   | { type: 'meta'; conversationId: string; title: string }
   | { type: 'chunk'; text: string }
   | { type: 'suggestions'; items: string[] }
+  | { type: 'progress'; message: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
 

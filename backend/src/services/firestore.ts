@@ -1,4 +1,5 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import type { EnglishMistakeData } from '../models/api'
 
 export interface ConversationDoc {
   id: string
@@ -106,4 +107,18 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   messagesSnap.docs.forEach((d) => batch.delete(d.ref))
   batch.delete(db.collection('conversations').doc(conversationId))
   await batch.commit()
+}
+
+export async function saveEnglishMistake(
+  uid: string,
+  conversationId: string,
+  data: EnglishMistakeData
+): Promise<void> {
+  const db = getFirestore()
+  await db.collection('english_mistakes').add({
+    uid,
+    conversationId,
+    ...data,
+    createdAt: Timestamp.now(),
+  })
 }
