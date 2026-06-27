@@ -167,4 +167,43 @@ describe('GeminiProvider', () => {
     expect(items).toEqual(['Done.'])
   })
 
+  it('yields save_english_mistake item when Gemini calls save_english_mistake', async () => {
+    const mistakeData = {
+      originalText: 'I resolved the issue with downgrade of Node version.',
+      correctedText: 'I resolved the issue by downgrading the Node version.',
+      category: 'grammar',
+      severity: 'medium',
+      patternKey: 'by_gerund_for_method',
+    }
+    async function* fakeStream() {
+      yield { text: () => 'Great effort!', candidates: undefined }
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    name: 'save_english_mistake',
+                    args: mistakeData,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(
+      provider.chatStream([], 'I resolved the issue with downgrade of Node version.')
+    )
+    expect(items).toEqual([
+      'Great effort!',
+      { type: 'save_english_mistake', data: mistakeData },
+    ])
+  })
+
 })

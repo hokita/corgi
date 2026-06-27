@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import type { AIProvider, Message, StreamItem } from './AIProvider'
+import type { EnglishMistakeData } from '../models/api'
 
-const suggestOptionsTool = {
+const functionTools = {
   functionDeclarations: [
     {
       name: 'suggest_options',
@@ -17,6 +18,38 @@ const suggestOptionsTool = {
           },
         },
         required: ['items'],
+      },
+    },
+    {
+      name: 'save_english_mistake',
+      description:
+        "Save an English learning point when the user's message contains a grammar mistake, unnatural phrasing, wrong preposition, article error, or word choice issue worth reviewing later. Only call for genuinely valuable learning points — skip trivial typos or very minor issues.",
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          originalText: {
+            type: SchemaType.STRING,
+            description: "The user's original phrasing that contains the mistake",
+          },
+          correctedText: {
+            type: SchemaType.STRING,
+            description: 'The improved, natural English version',
+          },
+          category: {
+            type: SchemaType.STRING,
+            description: 'One of: grammar, word-choice, preposition, article, phrasing',
+          },
+          severity: {
+            type: SchemaType.STRING,
+            description: 'One of: low, medium, high',
+          },
+          patternKey: {
+            type: SchemaType.STRING,
+            description:
+              'A reusable snake_case pattern identifier, e.g. by_gerund_for_method',
+          },
+        },
+        required: ['originalText', 'correctedText', 'category', 'severity', 'patternKey'],
       },
     },
   ],
@@ -37,13 +70,13 @@ export class GeminiProvider implements AIProvider {
     this.model = client.getGenerativeModel({
       model: 'gemini-3.5-flash',
       systemInstruction:
-        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options.',
+        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English.',
     })
   }
 
   async *chatStream(history: Message[], newMessage: string): AsyncIterable<StreamItem> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: any[] = [suggestOptionsTool]
+    const tools: any[] = [functionTools]
     if (this.googleSearch) tools.push({ googleSearch: {} })
     const chat = this.model.startChat({
       history: history.map((m) => ({
@@ -72,6 +105,9 @@ export class GeminiProvider implements AIProvider {
               if (Array.isArray(items) && items.length > 0) {
                 suggestOptionsItems = items
               }
+            } else if (name === 'save_english_mistake') {
+              hasFunctionCall = true
+              yield { type: 'save_english_mistake', data: args as EnglishMistakeData }
             }
           }
         }
