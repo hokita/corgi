@@ -148,7 +148,7 @@ export class GeminiProvider implements AIProvider {
       ]
       const followUp = await this.model.generateContentStream(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { contents: manualHistory, tools } as any
+        { contents: manualHistory, tools, toolConfig: { includeServerSideToolInvocations: true } } as any
       )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of followUp.stream as any) {
