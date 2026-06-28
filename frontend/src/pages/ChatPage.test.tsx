@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { User } from 'firebase/auth'
 import type { StreamCallbacks } from '../api'
 
 vi.mock('../api', () => ({
@@ -30,7 +31,7 @@ const fakeUser = {
   displayName: 'User',
   photoURL: null,
   email: 'test@example.com',
-} as any
+} as unknown as User
 
 beforeEach(() => {
   vi.clearAllMocks()
