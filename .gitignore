@@ -5,3 +5,4 @@ dist/
 .env.production
 *.js.map
 .superpowers/
+.claude/settings.local.json
