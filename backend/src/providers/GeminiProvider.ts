@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import type { Content, Part, Tool, ToolConfig } from '@google/generative-ai'
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
 
 const functionTools = {
@@ -105,9 +106,8 @@ export class GeminiProvider implements AIProvider {
         `The current date and time is ${currentJstDatetime()}. ` +
         'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$.',
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: any[] = [functionTools]
-    if (this.googleSearch) tools.push({ googleSearch: {} })
+    const tools: Tool[] = [functionTools as Tool]
+    if (this.googleSearch) tools.push({ googleSearch: {} } as unknown as Tool)
     const chat = model.startChat({
       history: history.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -127,11 +127,10 @@ export class GeminiProvider implements AIProvider {
     // Capture raw parts from the stream. The SDK's ChatSession strips
     // thought_signature when merging chunks into its internal history, so we
     // preserve the raw parts ourselves for use in the follow-up call.
-    const rawModelParts: unknown[] = []
+    const rawModelParts: Part[] = []
 
     for await (const chunk of result.stream) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const part of (chunk as any).candidates?.[0]?.content?.parts ?? []) {
+      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
         rawModelParts.push(part)
       }
       let hasFunctionCall = false
@@ -167,27 +166,28 @@ export class GeminiProvider implements AIProvider {
     // with manually-built history (not chat.sendMessageStream) so the raw model
     // parts — including thought_signature — are preserved in the request.
     if (pendingFunctionResponses.length > 0 && !hasText) {
-      const manualHistory = [
+      const manualHistory: Content[] = [
         ...history.map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         })),
         { role: 'user', parts: [{ text: newMessage }] },
         { role: 'model', parts: rawModelParts },
-        { role: 'user', parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })) },
-      ]
-      const followUp = await model.generateContentStream(
         {
-          contents: manualHistory,
-          tools,
-          toolConfig: { includeServerSideToolInvocations: true },
-        } as any // eslint-disable-line @typescript-eslint/no-explicit-any
-      )
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for await (const chunk of followUp.stream as any) {
+          role: 'user',
+          parts: pendingFunctionResponses.map((r) => ({
+            functionResponse: { name: r.name, response: r.response as object },
+          })),
+        },
+      ]
+      const followUp = await model.generateContentStream({
+        contents: manualHistory,
+        tools,
+        toolConfig: { includeServerSideToolInvocations: true } as unknown as ToolConfig,
+      })
+      for await (const chunk of followUp.stream) {
         let hasFunctionCall = false
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const candidate of (chunk as any).candidates ?? []) {
+        for (const candidate of chunk.candidates ?? []) {
           for (const part of candidate.content?.parts ?? []) {
             if ('functionCall' in part) {
               const { name, args } = part.functionCall as { name: string; args: unknown }
@@ -202,8 +202,7 @@ export class GeminiProvider implements AIProvider {
           }
         }
         if (!hasFunctionCall) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const text = (chunk as any).text?.()
+          const text = chunk.text()
           if (text) yield text
         }
       }
