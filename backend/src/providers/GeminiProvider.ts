@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
-import type { AIProvider, TitleGenerator, Message, StreamItem, FunctionExecutor } from './AIProvider'
+import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
 
 const functionTools = {
   functionDeclarations: [
@@ -86,28 +86,13 @@ function currentJstDatetime(): string {
   return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Tokyo' }).replace('T', ' ') + ' JST'
 }
 
-export class GeminiProvider implements AIProvider, TitleGenerator {
+export class GeminiProvider implements AIProvider {
   private client: GoogleGenerativeAI
   private googleSearch: boolean
 
   constructor(apiKey: string, options: GeminiProviderOptions = {}) {
     this.googleSearch = options.googleSearch ?? false
     this.client = new GoogleGenerativeAI(apiKey)
-  }
-
-  async generateTitle(message: string): Promise<string> {
-    try {
-      const model = this.client.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
-      const prompt =
-        `Generate a short title (max 50 characters, no quotes, no punctuation at end) ` +
-        `for a conversation that starts with this message: "${message}"\n` +
-        `Return only the title, nothing else.`
-      const result = await model.generateContent(prompt)
-      const title = result.response.text().trim()
-      return title.slice(0, 50) || message.slice(0, 40)
-    } catch {
-      return message.slice(0, 40)
-    }
   }
 
   async *chatStream(history: Message[], newMessage: string, executeFn: FunctionExecutor): AsyncIterable<StreamItem> {

@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { authMiddleware } from './middleware/auth'
 import { GeminiProvider } from './providers/GeminiProvider'
+import { GeminiTitleGenerator } from './providers/GeminiTitleGenerator'
 import { createConversationsRouter } from './routes/conversations'
 
 export function createApp() {
@@ -10,11 +11,13 @@ export function createApp() {
   app.use(cors({ origin: process.env.FRONTEND_URL }))
   app.use(express.json())
   app.get('/health', (_req, res) => res.json({ ok: true }))
-  const provider = new GeminiProvider(process.env.GEMINI_API_KEY!, { googleSearch: true })
   app.use(
     '/api/conversations',
     authMiddleware,
-    createConversationsRouter(provider)
+    createConversationsRouter(
+      new GeminiProvider(process.env.GEMINI_API_KEY!, { googleSearch: true }),
+      new GeminiTitleGenerator(process.env.GEMINI_API_KEY!)
+    )
   )
   return app
 }

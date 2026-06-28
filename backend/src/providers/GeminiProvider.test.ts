@@ -4,11 +4,9 @@ import type { StreamItem, FunctionExecutor } from './AIProvider'
 const mockSendMessageStream = vi.fn()
 const mockGenerateContentStream = vi.fn()
 const mockStartChat = vi.fn(() => ({ sendMessageStream: mockSendMessageStream }))
-const mockGenerateContent = vi.fn()
 const mockGetGenerativeModel = vi.fn(() => ({
   startChat: mockStartChat,
   generateContentStream: mockGenerateContentStream,
-  generateContent: mockGenerateContent,
 }))
 
 vi.mock('@google/generative-ai', () => ({
@@ -276,29 +274,5 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'Hi', executeFn))
 
     expect(executeFn).toHaveBeenCalledWith('unknown_tool', {})
-  })
-
-  it('generateTitle returns AI-generated title', async () => {
-    mockGetGenerativeModel.mockReturnValueOnce({
-      startChat: mockStartChat,
-      generateContentStream: mockGenerateContentStream,
-      generateContent: vi.fn().mockResolvedValue({
-        response: { text: () => 'Learning Japanese Basics' },
-      }),
-    })
-    const provider = new GeminiProvider('fake-key')
-    const title = await provider.generateTitle('I want to start learning Japanese')
-    expect(title).toBe('Learning Japanese Basics')
-  })
-
-  it('generateTitle falls back to truncation on error', async () => {
-    mockGetGenerativeModel.mockReturnValueOnce({
-      startChat: mockStartChat,
-      generateContentStream: mockGenerateContentStream,
-      generateContent: vi.fn().mockRejectedValue(new Error('API error')),
-    })
-    const provider = new GeminiProvider('fake-key')
-    const title = await provider.generateTitle('A'.repeat(60))
-    expect(title).toBe('A'.repeat(40))
   })
 })
