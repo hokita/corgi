@@ -177,12 +177,11 @@ export class GeminiProvider implements AIProvider {
         { role: 'user', parts: pendingFunctionResponses.map((r) => ({ functionResponse: r })) },
       ]
       const followUp = await model.generateContentStream(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {
           contents: manualHistory,
           tools,
           toolConfig: { includeServerSideToolInvocations: true },
-        } as any
+        } as any // eslint-disable-line @typescript-eslint/no-explicit-any
       )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of followUp.stream as any) {
