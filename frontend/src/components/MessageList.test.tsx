@@ -32,7 +32,10 @@ describe('MessageList', () => {
 
   it('does not render suggestion buttons for messages without suggestions', () => {
     render(<MessageList messages={[msg('assistant', 'Hello')]} onSuggestionClick={() => {}} />)
-    expect(screen.queryByRole('button')).toBeNull()
+    // Only the copy button should be present; no suggestion buttons
+    const buttons = screen.queryAllByRole('button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveTextContent('Copy')
   })
 
   it('calls onSuggestionClick when an active button is clicked', () => {
