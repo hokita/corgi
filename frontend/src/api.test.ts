@@ -138,4 +138,3 @@ describe('api.deleteConversation', () => {
     )
   })
 })
-

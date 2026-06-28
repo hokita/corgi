@@ -185,7 +185,11 @@ describe('GeminiProvider', () => {
       patternKey: 'past_tense_for_past_action',
     }
     const rawFunctionCallPart = {
-      functionCall: { name: 'save_english_mistake', args: mistakeData, thought_signature: 'abc123' },
+      functionCall: {
+        name: 'save_english_mistake',
+        args: mistakeData,
+        thought_signature: 'abc123',
+      },
     }
     async function* firstStream() {
       yield {
@@ -201,7 +205,9 @@ describe('GeminiProvider', () => {
 
     const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
     const provider = new GeminiProvider('fake-key')
-    const items = await collectStream(provider.chatStream([], 'I go to school yesterday.', executeFn))
+    const items = await collectStream(
+      provider.chatStream([], 'I go to school yesterday.', executeFn)
+    )
 
     expect(executeFn).toHaveBeenCalledWith('save_english_mistake', mistakeData)
     expect(items).toEqual(['Great effort! Keep practicing.'])
@@ -246,7 +252,9 @@ describe('GeminiProvider', () => {
     const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
     const allParts = followUpArg.contents.flatMap((c) => c.parts)
     expect(allParts).toContainEqual(
-      expect.objectContaining({ functionResponse: expect.objectContaining({ name: 'get_english_mistakes' }) })
+      expect.objectContaining({
+        functionResponse: expect.objectContaining({ name: 'get_english_mistakes' }),
+      })
     )
   })
 

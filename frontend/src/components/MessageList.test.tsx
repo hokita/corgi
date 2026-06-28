@@ -50,10 +50,7 @@ describe('MessageList', () => {
   it('marks the matching button as selected when next message matches a suggestion', () => {
     render(
       <MessageList
-        messages={[
-          msg('assistant', 'Choose:', ['Yes', 'No']),
-          msg('user', 'Yes'),
-        ]}
+        messages={[msg('assistant', 'Choose:', ['Yes', 'No']), msg('user', 'Yes')]}
         onSuggestionClick={() => {}}
       />
     )
@@ -87,12 +84,7 @@ describe('MessageList', () => {
   })
 
   it('does not render progress steps when progressSteps is empty', () => {
-    render(
-      <MessageList
-        messages={[msg('assistant', 'Hello')]}
-        progressSteps={[]}
-      />
-    )
+    render(<MessageList messages={[msg('assistant', 'Hello')]} progressSteps={[]} />)
     expect(screen.queryByText('Analyzing your message...')).toBeNull()
   })
 
@@ -110,5 +102,4 @@ describe('MessageList', () => {
     // Progress is rendered once (above last assistant), not for the first assistant message
     expect(screen.getAllByText('Analyzing your message...')).toHaveLength(1)
   })
-
 })

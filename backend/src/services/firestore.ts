@@ -58,11 +58,7 @@ export async function addMessage(
   const db = getFirestore()
   const data: Record<string, unknown> = { role, content, createdAt: Timestamp.now() }
   if (suggestions && suggestions.length > 0) data.suggestions = suggestions
-  await db
-    .collection('conversations')
-    .doc(conversationId)
-    .collection('messages')
-    .add(data)
+  await db.collection('conversations').doc(conversationId).collection('messages').add(data)
 }
 
 export async function getMessages(conversationId: string): Promise<FirestoreMessage[]> {

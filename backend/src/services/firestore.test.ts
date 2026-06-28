@@ -72,7 +72,11 @@ describe('listEnglishMistakes', () => {
     mockGet.mockResolvedValueOnce({ docs: [] })
     await listEnglishMistakes('u1', { startDate: '2026-06-27' })
     expect(mockTimestampFromDate).toHaveBeenCalledWith(new Date('2026-06-27'))
-    expect(mockQuery.where).toHaveBeenCalledWith('createdAt', '>=', expect.objectContaining({ _type: 'Timestamp' }))
+    expect(mockQuery.where).toHaveBeenCalledWith(
+      'createdAt',
+      '>=',
+      expect.objectContaining({ _type: 'Timestamp' })
+    )
   })
 
   it('filters by endDate using next-day exclusive Timestamp', async () => {
@@ -81,7 +85,11 @@ describe('listEnglishMistakes', () => {
     const nextDay = new Date('2026-06-27')
     nextDay.setDate(nextDay.getDate() + 1)
     expect(mockTimestampFromDate).toHaveBeenCalledWith(nextDay)
-    expect(mockQuery.where).toHaveBeenCalledWith('createdAt', '<', expect.objectContaining({ _type: 'Timestamp' }))
+    expect(mockQuery.where).toHaveBeenCalledWith(
+      'createdAt',
+      '<',
+      expect.objectContaining({ _type: 'Timestamp' })
+    )
   })
 
   it('filters by category in-memory', async () => {
@@ -91,7 +99,11 @@ describe('listEnglishMistakes', () => {
     const result = await listEnglishMistakes('u1', { category: 'grammar' })
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('m1')
-    expect(mockQuery.where).not.toHaveBeenCalledWith('category', expect.anything(), expect.anything())
+    expect(mockQuery.where).not.toHaveBeenCalledWith(
+      'category',
+      expect.anything(),
+      expect.anything()
+    )
   })
 
   it('uses custom limit when provided', async () => {

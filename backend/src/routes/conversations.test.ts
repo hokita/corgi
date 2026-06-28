@@ -129,7 +129,12 @@ describe('POST /api/conversations', () => {
       })()
     })
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith(
+      'conv123',
+      'assistant',
+      'Hello world',
+      undefined
+    )
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
@@ -156,13 +161,11 @@ describe('POST /api/conversations', () => {
         yield { type: 'suggestions', items: ['Yes', 'No'] }
       })()
     })
-    await request(app)
-      .post('/api/conversations')
-      .send({ message: 'Give me options' })
-      .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith(
-      'conv123', 'assistant', 'Choose:', ['Yes', 'No']
-    )
+    await request(app).post('/api/conversations').send({ message: 'Give me options' }).buffer(true)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Choose:', [
+      'Yes',
+      'No',
+    ])
   })
 
   it('emits progress events around the response', async () => {
@@ -214,11 +217,29 @@ describe('POST /api/conversations', () => {
   })
 
   it('executor fetches mistakes from Firestore when called with get_english_mistakes', async () => {
-    const mockMistakes = [{ id: 'm1', originalText: 'I go', correctedText: 'I went', category: 'grammar', severity: 'medium', patternKey: 'past_tense', uid: 'u1', conversationId: 'conv123', createdAt: '2026-06-27T00:00:00.000Z' }]
+    const mockMistakes = [
+      {
+        id: 'm1',
+        originalText: 'I go',
+        correctedText: 'I went',
+        category: 'grammar',
+        severity: 'medium',
+        patternKey: 'past_tense',
+        uid: 'u1',
+        conversationId: 'conv123',
+        createdAt: '2026-06-27T00:00:00.000Z',
+      },
+    ]
     vi.mocked(firestoreService.listEnglishMistakes).mockResolvedValueOnce(mockMistakes)
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
-    const result = await capturedExecuteFn!('get_english_mistakes', { startDate: '2026-06-27', category: 'grammar' })
-    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', { startDate: '2026-06-27', category: 'grammar' })
+    const result = await capturedExecuteFn!('get_english_mistakes', {
+      startDate: '2026-06-27',
+      category: 'grammar',
+    })
+    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', {
+      startDate: '2026-06-27',
+      category: 'grammar',
+    })
     expect(result).toEqual({ mistakes: mockMistakes })
   })
 
@@ -285,7 +306,12 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Follow up' })
       .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Hello world', undefined)
+    expect(firestoreService.addMessage).toHaveBeenCalledWith(
+      'conv123',
+      'assistant',
+      'Hello world',
+      undefined
+    )
   })
 
   it('emits suggestions SSE event when AI yields suggestions', async () => {
@@ -316,9 +342,10 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Give me options' })
       .buffer(true)
-    expect(firestoreService.addMessage).toHaveBeenCalledWith(
-      'conv123', 'assistant', 'Choose:', ['Option A', 'Option B']
-    )
+    expect(firestoreService.addMessage).toHaveBeenCalledWith('conv123', 'assistant', 'Choose:', [
+      'Option A',
+      'Option B',
+    ])
   })
 
   it('emits progress events around the response', async () => {
@@ -340,7 +367,10 @@ describe('POST /api/conversations/:id/messages', () => {
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
     }
-    await request(app).post('/api/conversations/conv123/messages').send({ message: 'Hi' }).buffer(true)
+    await request(app)
+      .post('/api/conversations/conv123/messages')
+      .send({ message: 'Hi' })
+      .buffer(true)
     const result = await capturedExecuteFn!('save_english_mistake', mistakeData)
     expect(firestoreService.saveEnglishMistake).toHaveBeenCalledWith('u1', 'conv123', mistakeData)
     expect(result).toEqual({ result: 'saved' })
@@ -358,7 +388,9 @@ describe('POST /api/conversations/:id/messages', () => {
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Show mistakes' })
       .buffer(true)
-    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', { startDate: '2026-06-27' })
+    expect(firestoreService.listEnglishMistakes).toHaveBeenCalledWith('u1', {
+      startDate: '2026-06-27',
+    })
     const events = parseSSE(res.text)
     expect(events).toContainEqual({ type: 'progress', message: 'Fetching your mistakes...' })
   })

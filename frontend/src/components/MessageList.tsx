@@ -23,9 +23,7 @@ export default function MessageList({ messages, onSuggestionClick, progressSteps
         const nextMsg = messages[i + 1]
         const hasFollowUp = nextMsg?.role === 'user'
         const selectedItem =
-          hasFollowUp && m.suggestions?.includes(nextMsg.content)
-            ? nextMsg.content
-            : undefined
+          hasFollowUp && m.suggestions?.includes(nextMsg.content) ? nextMsg.content : undefined
         const isLastAssistant = i === messages.length - 1 && m.role === 'assistant'
 
         return (

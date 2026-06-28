@@ -16,7 +16,11 @@ function writeSSE(res: import('express').Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
-function makeExecutor(uid: string, conversationId: string, res: import('express').Response): FunctionExecutor {
+function makeExecutor(
+  uid: string,
+  conversationId: string,
+  res: import('express').Response
+): FunctionExecutor {
   return async (name: string, args: unknown) => {
     if (name === 'save_english_mistake') {
       await db.saveEnglishMistake(uid, conversationId, args as EnglishMistakeData)

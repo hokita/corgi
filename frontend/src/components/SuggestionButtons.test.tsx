@@ -18,9 +18,7 @@ describe('SuggestionButtons', () => {
 
   it('does not call onSelect when disabled', () => {
     const onSelect = vi.fn()
-    render(
-      <SuggestionButtons items={['Yes', 'No']} disabled={true} onSelect={onSelect} />
-    )
+    render(<SuggestionButtons items={['Yes', 'No']} disabled={true} onSelect={onSelect} />)
     fireEvent.click(screen.getByText('Yes'))
     expect(onSelect).not.toHaveBeenCalled()
   })
@@ -50,9 +48,7 @@ describe('SuggestionButtons', () => {
   })
 
   it('applies blue outline style to all items when not disabled', () => {
-    render(
-      <SuggestionButtons items={['Yes', 'No']} disabled={false} onSelect={() => {}} />
-    )
+    render(<SuggestionButtons items={['Yes', 'No']} disabled={false} onSelect={() => {}} />)
     expect(screen.getByText('Yes').closest('button')!.className).toContain('text-[#0084ff]')
     expect(screen.getByText('No').closest('button')!.className).toContain('text-[#0084ff]')
   })

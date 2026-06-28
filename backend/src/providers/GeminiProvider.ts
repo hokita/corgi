@@ -44,8 +44,7 @@ const functionTools = {
           },
           patternKey: {
             type: SchemaType.STRING,
-            description:
-              'A reusable snake_case pattern identifier, e.g. by_gerund_for_method',
+            description: 'A reusable snake_case pattern identifier, e.g. by_gerund_for_method',
           },
         },
         required: ['originalText', 'correctedText', 'category', 'severity', 'patternKey'],
@@ -68,7 +67,8 @@ const functionTools = {
           },
           category: {
             type: SchemaType.STRING,
-            description: 'Filter by category: grammar, word-choice, preposition, article, or phrasing',
+            description:
+              'Filter by category: grammar, word-choice, preposition, article, or phrasing',
           },
         },
         required: [],
@@ -76,7 +76,6 @@ const functionTools = {
     },
   ],
 }
-
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -95,7 +94,11 @@ export class GeminiProvider implements AIProvider {
     this.client = new GoogleGenerativeAI(apiKey)
   }
 
-  async *chatStream(history: Message[], newMessage: string, executeFn: FunctionExecutor): AsyncIterable<StreamItem> {
+  async *chatStream(
+    history: Message[],
+    newMessage: string,
+    executeFn: FunctionExecutor
+  ): AsyncIterable<StreamItem> {
     const model = this.client.getGenerativeModel({
       model: 'gemini-3.5-flash',
       systemInstruction:
@@ -175,7 +178,11 @@ export class GeminiProvider implements AIProvider {
       ]
       const followUp = await model.generateContentStream(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { contents: manualHistory, tools, toolConfig: { includeServerSideToolInvocations: true } } as any
+        {
+          contents: manualHistory,
+          tools,
+          toolConfig: { includeServerSideToolInvocations: true },
+        } as any
       )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of followUp.stream as any) {
