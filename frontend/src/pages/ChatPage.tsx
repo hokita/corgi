@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { auth } from '../firebase'
@@ -19,16 +19,28 @@ export default function ChatPage({ user }: Props) {
   const [sending, setSending] = useState(false)
   const [progressSteps, setProgressSteps] = useState<string[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast(msg)
+    toastTimer.current = setTimeout(() => setToast(null), 4000)
+  }
 
   useEffect(() => {
-    api.listConversations().then(setConversations).catch(console.error)
+    api.listConversations().then(setConversations).catch(() => showToast('Failed to load conversations'))
   }, [])
 
   const loadConversation = useCallback(async (id: string) => {
     setActiveId(id)
     setDrawerOpen(false)
-    const msgs = await api.getMessages(id)
-    setMessages(msgs)
+    try {
+      const msgs = await api.getMessages(id)
+      setMessages(msgs)
+    } catch {
+      showToast('Failed to load messages')
+    }
   }, [])
 
   async function handleSend(text: string) {
@@ -66,9 +78,10 @@ export default function ChatPage({ user }: Props) {
       setProgressSteps((prev) => [...prev, msg])
     }
 
-    const onError = () => {
+    const onError = (message: string) => {
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
+      showToast(message)
     }
 
     try {
@@ -127,16 +140,20 @@ export default function ChatPage({ user }: Props) {
       }
     } catch (e) {
       console.error(e)
-      onError()
+      onError('Failed to send message')
     }
   }
 
   async function handleDelete(id: string) {
-    await api.deleteConversation(id)
-    setConversations((prev) => prev.filter((c) => c.id !== id))
-    if (activeId === id) {
-      setActiveId(null)
-      setMessages([])
+    try {
+      await api.deleteConversation(id)
+      setConversations((prev) => prev.filter((c) => c.id !== id))
+      if (activeId === id) {
+        setActiveId(null)
+        setMessages([])
+      }
+    } catch {
+      showToast('Failed to delete conversation')
     }
   }
 
@@ -188,6 +205,12 @@ export default function ChatPage({ user }: Props) {
           onNewChat={handleNewChat}
           onClose={() => setDrawerOpen(false)}
         />
+      )}
+
+      {toast !== null && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm whitespace-nowrap">
+          {toast}
+        </div>
       )}
     </div>
   )
