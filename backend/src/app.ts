@@ -14,7 +14,7 @@ export function createApp() {
   app.use(
     '/api/conversations',
     authMiddleware,
-    createConversationsRouter(provider, provider)
+    createConversationsRouter(provider)
   )
   return app
 }

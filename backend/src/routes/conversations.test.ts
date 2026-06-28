@@ -3,6 +3,8 @@ import request from 'supertest'
 import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
 import type { AIProvider, TitleGenerator, FunctionExecutor } from '../providers/AIProvider'
+
+type AIService = AIProvider & TitleGenerator
 import type { StreamItem } from '../providers/AIProvider'
 
 vi.mock('../services/firestore', () => ({
@@ -45,14 +47,11 @@ async function* defaultStream() {
 
 let capturedExecuteFn: FunctionExecutor | undefined
 
-const mockAI: AIProvider = {
+const mockAI: AIService = {
   chatStream: vi.fn().mockImplementation((_history, _msg, executeFn: FunctionExecutor) => {
     capturedExecuteFn = executeFn
     return defaultStream()
   }),
-}
-
-const mockTitleGen: TitleGenerator = {
   generateTitle: vi.fn().mockResolvedValue('Mock Title'),
 }
 
@@ -63,7 +62,7 @@ function mockAuth(req: Request, _: Response, next: NextFunction) {
 
 const app = express()
 app.use(express.json())
-app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI, mockTitleGen))
+app.use('/api/conversations', mockAuth, createConversationsRouter(mockAI))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -72,7 +71,7 @@ beforeEach(() => {
     capturedExecuteFn = executeFn
     return defaultStream()
   })
-  vi.mocked(mockTitleGen.generateTitle).mockResolvedValue('Mock Title')
+  vi.mocked(mockAI.generateTitle).mockResolvedValue('Mock Title')
 })
 
 function parseSSE(text: string): Array<{ type: string; [key: string]: unknown }> {
@@ -111,12 +110,12 @@ describe('POST /api/conversations', () => {
   })
 
   it('uses AI-generated title from titleGen', async () => {
-    vi.mocked(mockTitleGen.generateTitle).mockResolvedValueOnce('Learning Japanese')
+    vi.mocked(mockAI.generateTitle).mockResolvedValueOnce('Learning Japanese')
     await request(app)
       .post('/api/conversations')
       .send({ message: 'I want to learn Japanese' })
       .buffer(true)
-    expect(mockTitleGen.generateTitle).toHaveBeenCalledWith('I want to learn Japanese')
+    expect(mockAI.generateTitle).toHaveBeenCalledWith('I want to learn Japanese')
     expect(firestoreService.createConversation).toHaveBeenCalledWith('u1', 'Learning Japanese')
   })
 
