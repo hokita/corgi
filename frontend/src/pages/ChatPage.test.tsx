@@ -38,6 +38,30 @@ beforeEach(() => {
   mockApi.listConversations.mockResolvedValue([])
 })
 
+describe('ChatPage title click', () => {
+  it('renders the title as a button', async () => {
+    render(<ChatPage user={fakeUser} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'corgi' })).toBeInTheDocument())
+  })
+
+  it('clicking the title resets to new-chat state without a page reload', async () => {
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockResolvedValue([{ role: 'user', content: 'hello', createdAt: '' }])
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.click(screen.getByText('☰'))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('hello'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'corgi' }))
+
+    expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+  })
+})
+
 describe('ChatPage error toasts', () => {
   it('shows "Failed to load conversations" when listConversations rejects', async () => {
     mockApi.listConversations.mockRejectedValue(new Error('Network error'))
