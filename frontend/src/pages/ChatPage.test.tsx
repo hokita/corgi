@@ -38,6 +38,25 @@ beforeEach(() => {
   mockApi.listConversations.mockResolvedValue([])
 })
 
+describe('ChatPage title click', () => {
+  it('renders the title as a button', async () => {
+    render(<ChatPage user={fakeUser} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'corgi' })).toBeInTheDocument())
+  })
+
+  it('clicking the title triggers a page reload', async () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { reload })
+
+    render(<ChatPage user={fakeUser} />)
+    fireEvent.click(screen.getByRole('button', { name: 'corgi' }))
+
+    expect(reload).toHaveBeenCalledOnce()
+
+    vi.unstubAllGlobals()
+  })
+})
+
 describe('ChatPage error toasts', () => {
   it('shows "Failed to load conversations" when listConversations rejects', async () => {
     mockApi.listConversations.mockRejectedValue(new Error('Network error'))

@@ -171,7 +171,12 @@ export default function ChatPage({ user }: Props) {
         >
           ☰
         </button>
-        <span className="font-bold">corgi</span>
+        <button
+          onClick={() => window.location.reload()}
+          className="font-bold bg-transparent border-none cursor-pointer p-0 text-base"
+        >
+          corgi
+        </button>
         <UserMenu user={user} />
       </div>
 
