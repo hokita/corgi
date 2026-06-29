@@ -172,7 +172,7 @@ export default function ChatPage({ user }: Props) {
           ☰
         </button>
         <button
-          onClick={handleNewChat}
+          onClick={() => window.location.reload()}
           className="font-bold bg-transparent border-none cursor-pointer p-0 text-base"
         >
           corgi

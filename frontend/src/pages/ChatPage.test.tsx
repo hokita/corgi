@@ -44,21 +44,16 @@ describe('ChatPage title click', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'corgi' })).toBeInTheDocument())
   })
 
-  it('clicking the title resets to new-chat state without a page reload', async () => {
-    mockApi.listConversations.mockResolvedValue([
-      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
-    ])
-    mockApi.getMessages.mockResolvedValue([{ role: 'user', content: 'hello', createdAt: '' }])
+  it('clicking the title triggers a page reload', async () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { reload })
+
     render(<ChatPage user={fakeUser} />)
-
-    fireEvent.click(screen.getByText('☰'))
-    await waitFor(() => screen.getByText('Chat 1'))
-    fireEvent.click(screen.getByText('Chat 1'))
-    await waitFor(() => screen.getByText('hello'))
-
     fireEvent.click(screen.getByRole('button', { name: 'corgi' }))
 
-    expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+    expect(reload).toHaveBeenCalledOnce()
+
+    vi.unstubAllGlobals()
   })
 })
 
