@@ -43,7 +43,7 @@ export default function MessageList({ messages, onSuggestionClick, progressSteps
             )}
             <div className={`max-w-[80%] group relative ${m.role === 'assistant' ? 'flex flex-col items-start' : ''}`}>
               <div
-                className={`px-3.5 py-2.5 text-sm leading-relaxed break-words ${
+                className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-full ${
                   m.role === 'user'
                     ? 'bg-[#0084ff] text-white rounded-[18px_18px_4px_18px] whitespace-pre-wrap'
                     : 'bg-gray-200 text-gray-900 rounded-[18px_18px_18px_4px]'
