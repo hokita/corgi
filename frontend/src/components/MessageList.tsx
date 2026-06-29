@@ -54,7 +54,7 @@ export default function MessageList({ messages, onSuggestionClick, progressSteps
               {m.role === 'assistant' && (
                 <button
                   onClick={() => handleCopy(m.content, i)}
-                  className="mt-1 flex items-center gap-1 px-2 py-0.5 text-xs text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded"
+                  className="mt-1 flex items-center gap-1 px-2 py-0.5 text-xs text-gray-400 hover:text-gray-600 transition-opacity duration-150 rounded opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                   title="Copy answer"
                 >
                   {copiedIndex === i ? (
