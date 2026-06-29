@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { auth } from '../firebase'
 import { api } from '../api'
 import type { Conversation, Message } from '../types'
 import MessageList from '../components/MessageList'
 import MessageInput from '../components/MessageInput'
 import HistoryDrawer from '../components/HistoryDrawer'
+import UserMenu from '../components/UserMenu'
 
 interface Props {
   user: User
@@ -173,13 +172,7 @@ export default function ChatPage({ user }: Props) {
           ☰
         </button>
         <span className="font-bold">corgi</span>
-        <img
-          src={user.photoURL ?? undefined}
-          alt={user.displayName ?? 'user'}
-          onClick={() => signOut(auth)}
-          title="Sign out"
-          className="w-8 h-8 rounded-full cursor-pointer"
-        />
+        <UserMenu user={user} />
       </div>
 
       {messages.length === 0 && !sending ? (
