@@ -75,6 +75,16 @@ const functionTools = {
         required: [],
       },
     },
+    {
+      name: 'get_hacker_news_briefing',
+      description:
+        'Fetch the current Hacker News front page and render a "Morning Coffee Briefing". Call when the user asks for HN news, a morning briefing, or a tech news digest.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {},
+        required: [],
+      },
+    },
   ],
 }
 
@@ -104,7 +114,7 @@ export class GeminiProvider implements AIProvider {
       model: 'gemini-3.5-flash',
       systemInstruction:
         `The current date and time is ${currentJstDatetime()}. ` +
-        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$.',
+        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$. When the user asks for Hacker News, a morning briefing, or a tech news digest, call `get_hacker_news_briefing` and format your reply exactly per the instructions returned in that function\'s response.',
     })
     const tools: Tool[] = [functionTools as Tool]
     if (this.googleSearch) tools.push({ googleSearch: {} } as unknown as Tool)

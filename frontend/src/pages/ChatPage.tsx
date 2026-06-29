@@ -6,6 +6,7 @@ import MessageList from '../components/MessageList'
 import MessageInput from '../components/MessageInput'
 import HistoryDrawer from '../components/HistoryDrawer'
 import UserMenu from '../components/UserMenu'
+import MorningBriefingButton from '../components/MorningBriefingButton'
 
 interface Props {
   user: User
@@ -181,8 +182,9 @@ export default function ChatPage({ user }: Props) {
       </div>
 
       {messages.length === 0 && !sending ? (
-        <div className="flex-1 flex items-center justify-center text-gray-400">
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
           Start a conversation
+          <MorningBriefingButton onSend={handleSend} disabled={sending} />
         </div>
       ) : (
         <MessageList
