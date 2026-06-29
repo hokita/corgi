@@ -91,6 +91,18 @@ describe('MessageList', () => {
     expect(screen.queryByText('Analyzing your message...')).toBeNull()
   })
 
+  it('does not render a balloon when the assistant message content is empty', () => {
+    render(
+      <MessageList
+        messages={[msg('assistant', '')]}
+        progressSteps={['Analyzing your message...']}
+      />
+    )
+    expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
+    expect(screen.queryByTestId('message-balloon')).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy/i })).toBeNull()
+  })
+
   it('only renders progress steps for the last assistant message', () => {
     render(
       <MessageList
