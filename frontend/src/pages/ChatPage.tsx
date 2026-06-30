@@ -73,9 +73,7 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
-    const onProgress = (msg: string) => {
-      setCurrentStep(msg)
-    }
+    const onProgress = (msg: string) => setCurrentStep(msg)
 
     const onError = (message: string) => {
       setMessages((prev) => prev.slice(0, -1))
@@ -103,6 +101,7 @@ export default function ChatPage({ user }: Props) {
           onSuggestions,
           onProgress,
           onDone: () => {
+            setCurrentStep(null)
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === newId
@@ -125,7 +124,7 @@ export default function ChatPage({ user }: Props) {
           onSuggestions,
           onProgress,
           onDone: () => {
-            clearThinkingSteps()
+            setCurrentStep(null)
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === id
@@ -190,7 +189,7 @@ export default function ChatPage({ user }: Props) {
         <MessageList
           messages={messages}
           onSuggestionClick={handleSend}
-          currentStep={sending ? currentStep : null}
+          currentStep={currentStep}
         />
       )}
 
