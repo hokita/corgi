@@ -73,9 +73,8 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
-    const onProgress = (msg: string) => setCurrentStep(msg)
-
     const onError = (message: string) => {
+      setCurrentStep(null)
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
       showToast(message)
@@ -99,7 +98,7 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onProgress,
+          onProgress: setCurrentStep,
           onDone: () => {
             setCurrentStep(null)
             setConversations((prev) =>
@@ -122,7 +121,7 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onProgress,
+          onProgress: setCurrentStep,
           onDone: () => {
             setCurrentStep(null)
             setConversations((prev) =>

@@ -38,7 +38,7 @@ export default function MessageList({ messages, onSuggestionClick, currentStep }
             className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
           >
             {isLastAssistant && currentStep && (
-              <ThinkingProgress steps={[currentStep]} />
+              <ThinkingProgress step={currentStep} />
             )}
             <div className={`max-w-[80%] group relative ${m.role === 'assistant' ? 'flex flex-col items-start' : ''}`}>
               {m.content !== '' && (
