@@ -76,10 +76,16 @@ export default function ChatPage({ user }: Props) {
       setMessages((prev) => {
         const msgs = [...prev]
         const last = msgs[msgs.length - 1]
-        msgs[msgs.length - 1] = {
-          ...last,
-          thinkingSteps: [msg],
-        }
+        msgs[msgs.length - 1] = { ...last, thinkingSteps: [msg] }
+        return msgs
+      })
+    }
+
+    const clearThinkingSteps = () => {
+      setMessages((prev) => {
+        const msgs = [...prev]
+        const last = msgs[msgs.length - 1]
+        msgs[msgs.length - 1] = { ...last, thinkingSteps: undefined }
         return msgs
       })
     }
@@ -110,6 +116,7 @@ export default function ChatPage({ user }: Props) {
           onSuggestions,
           onProgress,
           onDone: () => {
+            clearThinkingSteps()
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === newId
@@ -132,6 +139,7 @@ export default function ChatPage({ user }: Props) {
           onSuggestions,
           onProgress,
           onDone: () => {
+            clearThinkingSteps()
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === id
