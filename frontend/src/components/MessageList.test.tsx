@@ -80,15 +80,12 @@ describe('MessageList', () => {
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
   })
 
-  it('renders thinking steps above an assistant message', () => {
+  it('renders the current thinking step above an assistant message', () => {
     render(
       <MessageList
-        messages={[
-          msg('assistant', 'Hello', undefined, ['Analyzing your message...', 'Saving learning point...']),
-        ]}
+        messages={[msg('assistant', 'Hello', undefined, ['Saving learning point...'])]}
       />
     )
-    expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
     expect(screen.getByText('Saving learning point...')).toBeInTheDocument()
   })
 

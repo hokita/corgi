@@ -78,7 +78,7 @@ export default function ChatPage({ user }: Props) {
         const last = msgs[msgs.length - 1]
         msgs[msgs.length - 1] = {
           ...last,
-          thinkingSteps: [...(last.thinkingSteps ?? []), msg],
+          thinkingSteps: [msg],
         }
         return msgs
       })
