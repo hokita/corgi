@@ -17,6 +17,7 @@ export default function ChatPage({ user }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
+  const [currentStep, setCurrentStep] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -73,21 +74,7 @@ export default function ChatPage({ user }: Props) {
     }
 
     const onProgress = (msg: string) => {
-      setMessages((prev) => {
-        const msgs = [...prev]
-        const last = msgs[msgs.length - 1]
-        msgs[msgs.length - 1] = { ...last, thinkingSteps: [msg] }
-        return msgs
-      })
-    }
-
-    const clearThinkingSteps = () => {
-      setMessages((prev) => {
-        const msgs = [...prev]
-        const last = msgs[msgs.length - 1]
-        msgs[msgs.length - 1] = { ...last, thinkingSteps: undefined }
-        return msgs
-      })
+      setCurrentStep(msg)
     }
 
     const onError = (message: string) => {
@@ -116,7 +103,6 @@ export default function ChatPage({ user }: Props) {
           onSuggestions,
           onProgress,
           onDone: () => {
-            clearThinkingSteps()
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === newId
@@ -204,6 +190,7 @@ export default function ChatPage({ user }: Props) {
         <MessageList
           messages={messages}
           onSuggestionClick={handleSend}
+          currentStep={sending ? currentStep : null}
         />
       )}
 
