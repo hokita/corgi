@@ -17,6 +17,7 @@ export default function ChatPage({ user }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
+  const [currentStep, setCurrentStep] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,25 +73,8 @@ export default function ChatPage({ user }: Props) {
       })
     }
 
-    const onProgress = (msg: string) => {
-      setMessages((prev) => {
-        const msgs = [...prev]
-        const last = msgs[msgs.length - 1]
-        msgs[msgs.length - 1] = { ...last, thinkingSteps: [msg] }
-        return msgs
-      })
-    }
-
-    const clearThinkingSteps = () => {
-      setMessages((prev) => {
-        const msgs = [...prev]
-        const last = msgs[msgs.length - 1]
-        msgs[msgs.length - 1] = { ...last, thinkingSteps: undefined }
-        return msgs
-      })
-    }
-
     const onError = (message: string) => {
+      setCurrentStep(null)
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
       showToast(message)
@@ -114,9 +98,9 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onProgress,
+          onProgress: setCurrentStep,
           onDone: () => {
-            clearThinkingSteps()
+            setCurrentStep(null)
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === newId
@@ -137,9 +121,9 @@ export default function ChatPage({ user }: Props) {
             appendChunk(chunk)
           },
           onSuggestions,
-          onProgress,
+          onProgress: setCurrentStep,
           onDone: () => {
-            clearThinkingSteps()
+            setCurrentStep(null)
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === id
@@ -204,6 +188,7 @@ export default function ChatPage({ user }: Props) {
         <MessageList
           messages={messages}
           onSuggestionClick={handleSend}
+          currentStep={currentStep}
         />
       )}
 

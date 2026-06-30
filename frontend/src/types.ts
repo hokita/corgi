@@ -10,5 +10,4 @@ export interface Message {
   content: string
   createdAt: string
   suggestions?: string[]
-  thinkingSteps?: string[]
 }

@@ -80,7 +80,6 @@ export function createConversationsRouter(ai: AIProvider, titleGen: TitleGenerat
       }
       await db.addMessage(conversationId, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(conversationId, fullText)
-      writeSSE(res, { type: 'progress', message: 'Done' })
       writeSSE(res, { type: 'done' })
     } catch (err) {
       console.error(err)
@@ -133,7 +132,6 @@ export function createConversationsRouter(ai: AIProvider, titleGen: TitleGenerat
       }
       await db.addMessage(id, 'assistant', fullText, suggestions)
       await db.updateConversationLastMessage(id, fullText)
-      writeSSE(res, { type: 'progress', message: 'Done' })
       writeSSE(res, { type: 'done' })
     } catch (err) {
       console.error(err)
