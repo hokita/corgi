@@ -75,14 +75,24 @@ describe('MessageList', () => {
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
   })
 
-  it('renders the current thinking step above the last assistant message', () => {
+  it('renders the current thinking step above the last assistant message when content is empty', () => {
     render(
       <MessageList
-        messages={[msg('assistant', 'Hello')]}
+        messages={[msg('assistant', '')]}
         currentStep="Fetching your mistakes..."
       />
     )
     expect(screen.getByText('Fetching your mistakes...')).toBeInTheDocument()
+  })
+
+  it('does not render thinking step when assistant message has content', () => {
+    render(
+      <MessageList
+        messages={[msg('assistant', 'Hello there')]}
+        currentStep="Analyzing your message..."
+      />
+    )
+    expect(screen.queryByText('Analyzing your message...')).toBeNull()
   })
 
   it('does not render a thinking step when currentStep is null', () => {
@@ -108,7 +118,7 @@ describe('MessageList', () => {
         messages={[
           msg('assistant', 'First reply'),
           msg('user', 'Follow up'),
-          msg('assistant', 'Second reply'),
+          msg('assistant', ''),
         ]}
         currentStep="Analyzing your message..."
       />
