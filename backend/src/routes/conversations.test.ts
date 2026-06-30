@@ -194,6 +194,7 @@ describe('POST /api/conversations', () => {
       category: 'grammar',
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
+      type: 'mistake',
     }
     await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
     const result = await capturedExecuteFn!('save_english_mistake', mistakeData)
@@ -208,6 +209,7 @@ describe('POST /api/conversations', () => {
       category: 'grammar',
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
+      type: 'mistake',
     }
     vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
       capturedExecuteFn = executeFn
@@ -405,6 +407,7 @@ describe('POST /api/conversations/:id/messages', () => {
       category: 'grammar',
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
+      type: 'mistake',
     }
     await request(app)
       .post('/api/conversations/conv123/messages')

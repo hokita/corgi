@@ -34,6 +34,7 @@ function makeDoc(id: string, category: string) {
       category,
       severity: 'medium',
       patternKey: 'some_pattern',
+      type: 'mistake',
       createdAt: { toDate: () => new Date('2026-06-27T10:00:00Z') },
     }),
   }
@@ -64,6 +65,7 @@ describe('listEnglishMistakes', () => {
       category: 'grammar',
       severity: 'medium',
       patternKey: 'some_pattern',
+      type: 'mistake',
       createdAt: '2026-06-27T10:00:00.000Z',
     })
   })

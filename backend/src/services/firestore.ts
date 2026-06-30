@@ -136,6 +136,7 @@ export async function listEnglishMistakes(
       category: data.category as string,
       severity: data.severity as string,
       patternKey: data.patternKey as string,
+      type: data.type as EnglishMistakeDoc['type'],
       createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
     } as EnglishMistakeDoc
   })

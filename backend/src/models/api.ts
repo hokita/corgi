@@ -31,6 +31,8 @@ export interface EnglishMistakeData {
   category: string
   severity: string
   patternKey: string
+  // 'mistake' = a genuine grammar/usage error; 'suggestion' = correct but unnatural phrasing
+  type: 'mistake' | 'suggestion'
 }
 
 // GET /api/english-mistakes (or via function calling)
