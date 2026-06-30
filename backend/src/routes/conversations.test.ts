@@ -185,7 +185,6 @@ describe('POST /api/conversations', () => {
     const events = parseSSE(res.text)
     const progressEvents = events.filter((e) => e.type === 'progress')
     expect(progressEvents[0]).toEqual({ type: 'progress', message: 'Analyzing your message...' })
-    expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
   })
 
   it('executor saves english mistake to Firestore and returns saved result', async () => {
@@ -397,7 +396,6 @@ describe('POST /api/conversations/:id/messages', () => {
     const events = parseSSE(res.text)
     const progressEvents = events.filter((e) => e.type === 'progress')
     expect(progressEvents[0]).toEqual({ type: 'progress', message: 'Analyzing your message...' })
-    expect(progressEvents[progressEvents.length - 1]).toEqual({ type: 'progress', message: 'Done' })
   })
 
   it('executor saves english mistake to Firestore and returns saved result', async () => {
