@@ -3,8 +3,13 @@ import { describe, it, expect, vi } from 'vitest'
 import MessageList from './MessageList'
 import type { Message } from '../types'
 
-function msg(role: 'user' | 'assistant', content: string, suggestions?: string[]): Message {
-  return { role, content, createdAt: new Date().toISOString(), suggestions }
+function msg(
+  role: 'user' | 'assistant',
+  content: string,
+  suggestions?: string[],
+  thinkingSteps?: string[]
+): Message {
+  return { role, content, createdAt: new Date().toISOString(), suggestions, thinkingSteps }
 }
 
 describe('MessageList', () => {
@@ -75,27 +80,24 @@ describe('MessageList', () => {
     expect(screen.getByText('No').closest('button')!.className).toContain('text-gray-400')
   })
 
-  it('renders progress steps above the last assistant message', () => {
+  it('renders the current thinking step above an assistant message', () => {
     render(
       <MessageList
-        messages={[msg('assistant', 'Hello')]}
-        progressSteps={['Analyzing your message...', 'Saving learning point...']}
+        messages={[msg('assistant', 'Hello', undefined, ['Saving learning point...'])]}
       />
     )
-    expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
     expect(screen.getByText('Saving learning point...')).toBeInTheDocument()
   })
 
-  it('does not render progress steps when progressSteps is empty', () => {
-    render(<MessageList messages={[msg('assistant', 'Hello')]} progressSteps={[]} />)
+  it('does not render thinking steps when thinkingSteps is absent', () => {
+    render(<MessageList messages={[msg('assistant', 'Hello')]} />)
     expect(screen.queryByText('Analyzing your message...')).toBeNull()
   })
 
-  it('does not render a balloon when the assistant message content is empty', () => {
+  it('does not render a balloon when the assistant message content is empty but has thinking steps', () => {
     render(
       <MessageList
-        messages={[msg('assistant', '')]}
-        progressSteps={['Analyzing your message...']}
+        messages={[msg('assistant', '', undefined, ['Analyzing your message...'])]}
       />
     )
     expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
@@ -103,18 +105,17 @@ describe('MessageList', () => {
     expect(screen.queryByRole('button', { name: /copy/i })).toBeNull()
   })
 
-  it('only renders progress steps for the last assistant message', () => {
+  it('renders thinking steps only for the messages that have them', () => {
     render(
       <MessageList
         messages={[
-          msg('assistant', 'First reply'),
+          msg('assistant', 'First reply', undefined, ['Step A']),
           msg('user', 'Follow up'),
-          msg('assistant', 'Second reply'),
+          msg('assistant', 'Second reply', undefined, ['Analyzing your message...']),
         ]}
-        progressSteps={['Analyzing your message...']}
       />
     )
-    // Progress is rendered once (above last assistant), not for the first assistant message
     expect(screen.getAllByText('Analyzing your message...')).toHaveLength(1)
+    expect(screen.getByText('Step A')).toBeInTheDocument()
   })
 })

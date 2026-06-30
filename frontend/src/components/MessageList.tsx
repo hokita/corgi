@@ -7,16 +7,15 @@ import ThinkingProgress from './ThinkingProgress'
 interface Props {
   messages: Message[]
   onSuggestionClick?: (text: string) => void
-  progressSteps?: string[]
 }
 
-export default function MessageList({ messages, onSuggestionClick, progressSteps = [] }: Props) {
+export default function MessageList({ messages, onSuggestionClick }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, progressSteps])
+  }, [messages])
 
   async function handleCopy(content: string, index: number) {
     await navigator.clipboard.writeText(content)
@@ -31,15 +30,13 @@ export default function MessageList({ messages, onSuggestionClick, progressSteps
         const hasFollowUp = nextMsg?.role === 'user'
         const selectedItem =
           hasFollowUp && m.suggestions?.includes(nextMsg.content) ? nextMsg.content : undefined
-        const isLastAssistant = i === messages.length - 1 && m.role === 'assistant'
-
         return (
           <div
             key={i}
             className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
           >
-            {isLastAssistant && progressSteps.length > 0 && (
-              <ThinkingProgress steps={progressSteps} />
+            {m.role === 'assistant' && m.thinkingSteps && m.thinkingSteps.length > 0 && (
+              <ThinkingProgress steps={m.thinkingSteps} />
             )}
             <div className={`max-w-[80%] group relative ${m.role === 'assistant' ? 'flex flex-col items-start' : ''}`}>
               {m.content !== '' && (
