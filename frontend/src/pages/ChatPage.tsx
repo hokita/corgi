@@ -17,7 +17,6 @@ export default function ChatPage({ user }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
-  const [progressSteps, setProgressSteps] = useState<string[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -45,7 +44,6 @@ export default function ChatPage({ user }: Props) {
 
   async function handleSend(text: string) {
     if (sending) return
-    setProgressSteps([])
     setSending(true)
     const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
     const placeholder: Message = {
@@ -75,7 +73,15 @@ export default function ChatPage({ user }: Props) {
     }
 
     const onProgress = (msg: string) => {
-      setProgressSteps((prev) => [...prev, msg])
+      setMessages((prev) => {
+        const msgs = [...prev]
+        const last = msgs[msgs.length - 1]
+        msgs[msgs.length - 1] = {
+          ...last,
+          thinkingSteps: [...(last.thinkingSteps ?? []), msg],
+        }
+        return msgs
+      })
     }
 
     const onError = (message: string) => {
@@ -190,7 +196,6 @@ export default function ChatPage({ user }: Props) {
         <MessageList
           messages={messages}
           onSuggestionClick={handleSend}
-          progressSteps={sending ? progressSteps : []}
         />
       )}
 
