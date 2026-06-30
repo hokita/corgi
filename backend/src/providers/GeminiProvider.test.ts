@@ -183,6 +183,7 @@ describe('GeminiProvider', () => {
       category: 'grammar',
       severity: 'medium',
       patternKey: 'past_tense_for_past_action',
+      type: 'mistake',
     }
     const rawFunctionCallPart = {
       functionCall: {
@@ -219,6 +220,39 @@ describe('GeminiProvider', () => {
     expect(modelTurn!.parts[0]).toMatchObject({
       functionCall: expect.objectContaining({ thought_signature: 'abc123' }),
     })
+  })
+
+  it('forwards type: "suggestion" to executeFn unchanged for naturalness-only saves', async () => {
+    const suggestionData = {
+      originalText: 'I am looking forward to see you.',
+      correctedText: 'I am looking forward to seeing you.',
+      category: 'phrasing',
+      severity: 'low',
+      patternKey: 'look_forward_to_gerund',
+      type: 'suggestion',
+    }
+    const rawFunctionCallPart = {
+      functionCall: { name: 'save_english_mistake', args: suggestionData },
+    }
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [{ content: { parts: [rawFunctionCallPart] } }],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => 'Sounds great! (More natural: ... → ...)', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(
+      provider.chatStream([], 'I am looking forward to see you.', executeFn)
+    )
+
+    expect(executeFn).toHaveBeenCalledWith('save_english_mistake', suggestionData)
   })
 
   it('calls executeFn for get_english_mistakes and uses result in follow-up', async () => {

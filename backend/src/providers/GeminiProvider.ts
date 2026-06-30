@@ -23,13 +23,13 @@ const functionTools = {
     {
       name: 'save_english_mistake',
       description:
-        "Save an English learning point when the user's message contains a grammar mistake, unnatural phrasing, wrong preposition, article error, or word choice issue worth reviewing later. Only call for genuinely valuable learning points — skip trivial typos or very minor issues.",
+        "Save an English learning point when the user's message contains a grammar mistake, unnatural phrasing, wrong preposition, article error, or word choice issue worth reviewing later — OR when the message is grammatically correct but a native speaker would naturally phrase it differently. Only call for genuinely valuable learning points — skip trivial typos or very minor issues.",
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
           originalText: {
             type: SchemaType.STRING,
-            description: "The user's original phrasing that contains the mistake",
+            description: "The user's original phrasing",
           },
           correctedText: {
             type: SchemaType.STRING,
@@ -47,8 +47,13 @@ const functionTools = {
             type: SchemaType.STRING,
             description: 'A reusable snake_case pattern identifier, e.g. by_gerund_for_method',
           },
+          type: {
+            type: SchemaType.STRING,
+            description:
+              '"mistake" if the original was grammatically wrong, "suggestion" if it was already correct but could sound more natural',
+          },
         },
-        required: ['originalText', 'correctedText', 'category', 'severity', 'patternKey'],
+        required: ['originalText', 'correctedText', 'category', 'severity', 'patternKey', 'type'],
       },
     },
     {
@@ -114,7 +119,7 @@ export class GeminiProvider implements AIProvider {
       model: 'gemini-3.5-flash',
       systemInstruction:
         `The current date and time is ${currentJstDatetime()}. ` +
-        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` — do not mention the correction in your reply unless the user explicitly asks about their English. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$. When the user asks for Hacker News, a morning briefing, or a tech news digest, call `get_hacker_news_briefing` and format your reply exactly per the instructions returned in that function\'s response.',
+        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues, AND for sentences that are grammatically correct but that a native speaker would phrase more naturally. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` with `type: "mistake"` for genuine errors or `type: "suggestion"` for correct-but-unnatural phrasing. For `type: "mistake"`, do not mention the correction in your reply unless the user explicitly asks about their English. For `type: "suggestion"`, briefly weave a friendly one-line aside into the end of your reply suggesting the more natural phrasing — keep it short and don\'t let it overshadow your main answer. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$. When the user asks for Hacker News, a morning briefing, or a tech news digest, call `get_hacker_news_briefing` and format your reply exactly per the instructions returned in that function\'s response.',
     })
     const tools: Tool[] = [functionTools as Tool]
     if (this.googleSearch) tools.push({ googleSearch: {} } as unknown as Tool)
