@@ -11,6 +11,8 @@ import type {
   GetMistakesParams,
 } from '../models/api'
 import * as db from '../services/firestore'
+import { getHNStories } from '../services/hnCache'
+import { HN_BRIEFING_PROMPT } from '../prompts/hackernews'
 
 function writeSSE(res: import('express').Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
@@ -31,6 +33,11 @@ function makeExecutor(
       writeSSE(res, { type: 'progress', message: 'Fetching your mistakes...' })
       const mistakes = await db.listEnglishMistakes(uid, args as GetMistakesParams)
       return { mistakes }
+    }
+    if (name === 'get_hacker_news_briefing') {
+      writeSSE(res, { type: 'progress', message: 'Fetching Hacker News front page...' })
+      const stories = await getHNStories()
+      return { stories, format_instructions: HN_BRIEFING_PROMPT }
     }
     return { error: 'unknown function' }
   }

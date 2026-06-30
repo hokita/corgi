@@ -36,8 +36,17 @@ vi.mock('../services/firestore', () => ({
   listEnglishMistakes: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../services/hnCache', () => ({
+  getHNStories: vi
+    .fn()
+    .mockResolvedValue([
+      { id: '1', title: 'Test Story', url: 'https://example.com', points: 100, comments: 10 },
+    ]),
+}))
+
 import { createConversationsRouter } from './conversations'
 import * as firestoreService from '../services/firestore'
+import * as hnCacheService from '../services/hnCache'
 
 async function* defaultStream() {
   yield 'AI reply'
@@ -257,6 +266,38 @@ describe('POST /api/conversations', () => {
       .buffer(true)
     const events = parseSSE(res.text)
     expect(events).toContainEqual({ type: 'progress', message: 'Fetching your mistakes...' })
+  })
+
+  it('executor fetches HN stories and returns format instructions for get_hacker_news_briefing', async () => {
+    await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
+    const result = (await capturedExecuteFn!('get_hacker_news_briefing', {})) as {
+      stories: unknown[]
+      format_instructions: string
+    }
+    expect(hnCacheService.getHNStories).toHaveBeenCalled()
+    expect(result.stories).toEqual([
+      { id: '1', title: 'Test Story', url: 'https://example.com', points: 100, comments: 10 },
+    ])
+    expect(result.format_instructions).toContain('Morning Coffee Briefing')
+  })
+
+  it('executor emits progress SSE when fetching HN briefing', async () => {
+    vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
+      capturedExecuteFn = executeFn
+      return (async function* () {
+        await executeFn('get_hacker_news_briefing', {})
+        yield 'Here is your briefing.'
+      })()
+    })
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ message: 'Give me the HN briefing' })
+      .buffer(true)
+    const events = parseSSE(res.text)
+    expect(events).toContainEqual({
+      type: 'progress',
+      message: 'Fetching Hacker News front page...',
+    })
   })
 })
 
