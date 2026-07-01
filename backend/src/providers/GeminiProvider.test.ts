@@ -290,6 +290,82 @@ describe('GeminiProvider', () => {
     )
   })
 
+  it('sends a functionResponse for suggest_options when it accompanies a tool call', async () => {
+    // Regression: the HN briefing turn is function-call-only and often includes
+    // suggest_options alongside the tool call. The follow-up request replays the
+    // model turn verbatim, so every functionCall in it needs a functionResponse
+    // or the API rejects the request.
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [
+                { functionCall: { name: 'get_hacker_news_briefing', args: {} } },
+                { functionCall: { name: 'suggest_options', args: { items: ['A', 'B'] } } },
+              ],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => '# ☕ Morning Coffee Briefing', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(executeFn).toHaveBeenCalledTimes(1)
+    expect(executeFn).toHaveBeenCalledWith('get_hacker_news_briefing', {})
+    expect(items).toEqual([
+      '# ☕ Morning Coffee Briefing',
+      { type: 'suggestions', items: ['A', 'B'] },
+    ])
+
+    type ContentTurn = { role: string; parts: unknown[] }
+    const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
+    const responseTurn = followUpArg.contents[followUpArg.contents.length - 1]
+    expect(responseTurn.parts).toEqual([
+      {
+        functionResponse: {
+          name: 'get_hacker_news_briefing',
+          response: { stories: [] },
+        },
+      },
+      {
+        functionResponse: {
+          name: 'suggest_options',
+          response: { result: 'displayed' },
+        },
+      },
+    ])
+  })
+
+  it('does not make a follow-up call when only suggest_options was called', async () => {
+    async function* fakeStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'suggest_options', args: { items: ['A', 'B'] } } }],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(mockGenerateContentStream).not.toHaveBeenCalled()
+    expect(items).toEqual([{ type: 'suggestions', items: ['A', 'B'] }])
+  })
+
   it('calls executeFn for unknown function calls', async () => {
     async function* fakeStream() {
       yield {

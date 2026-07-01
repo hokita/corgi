@@ -282,6 +282,17 @@ describe('POST /api/conversations', () => {
     expect(result.format_instructions).toContain('Morning Coffee Briefing')
   })
 
+  it('executor returns an error payload instead of throwing when a tool fails', async () => {
+    vi.mocked(hnCacheService.getHNStories).mockRejectedValueOnce(
+      new Error('Algolia HN API responded with 503')
+    )
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await request(app).post('/api/conversations').send({ message: 'Hi' }).buffer(true)
+    const result = await capturedExecuteFn!('get_hacker_news_briefing', {})
+    expect(result).toEqual({ error: 'Algolia HN API responded with 503' })
+    consoleError.mockRestore()
+  })
+
   it('executor emits progress SSE when fetching HN briefing', async () => {
     vi.mocked(mockAI.chatStream).mockImplementation((_h, _m, executeFn) => {
       capturedExecuteFn = executeFn
