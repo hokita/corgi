@@ -35,7 +35,7 @@ export interface EnglishMistakeData {
   type: 'mistake' | 'suggestion'
 }
 
-// GET /api/english-mistakes (or via function calling)
+// Returned by the get_english_mistakes function call
 export interface EnglishMistakeDoc extends EnglishMistakeData {
   id: string
   uid: string
