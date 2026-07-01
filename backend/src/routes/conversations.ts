@@ -7,12 +7,9 @@ import type {
   MessageResponse,
   SSEEvent,
   ErrorResponse,
-  EnglishMistakeData,
-  GetMistakesParams,
 } from '../models/api'
 import * as db from '../services/firestore'
-import { getHNStories } from '../services/hnCache'
-import { HN_BRIEFING_PROMPT } from '../prompts/hackernews'
+import { createFunctionExecutor } from '../tools/registry'
 
 function writeSSE(res: import('express').Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
@@ -23,24 +20,11 @@ function makeExecutor(
   conversationId: string,
   res: import('express').Response
 ): FunctionExecutor {
-  return async (name: string, args: unknown) => {
-    if (name === 'save_english_mistake') {
-      await db.saveEnglishMistake(uid, conversationId, args as EnglishMistakeData)
-      writeSSE(res, { type: 'progress', message: 'Saving learning point...' })
-      return { result: 'saved' }
-    }
-    if (name === 'get_english_mistakes') {
-      writeSSE(res, { type: 'progress', message: 'Fetching your mistakes...' })
-      const mistakes = await db.listEnglishMistakes(uid, args as GetMistakesParams)
-      return { mistakes }
-    }
-    if (name === 'get_hacker_news_briefing') {
-      writeSSE(res, { type: 'progress', message: 'Fetching Hacker News front page...' })
-      const stories = await getHNStories()
-      return { stories, format_instructions: HN_BRIEFING_PROMPT }
-    }
-    return { error: 'unknown function' }
-  }
+  return createFunctionExecutor({
+    uid,
+    conversationId,
+    emitProgress: (message) => writeSSE(res, { type: 'progress', message }),
+  })
 }
 
 export function createConversationsRouter(ai: AIProvider, titleGen: TitleGenerator): Router {
