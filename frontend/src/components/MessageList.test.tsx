@@ -77,10 +77,7 @@ describe('MessageList', () => {
 
   it('renders the current thinking step above the last assistant message when content is empty', () => {
     render(
-      <MessageList
-        messages={[msg('assistant', '')]}
-        currentStep="Fetching your mistakes..."
-      />
+      <MessageList messages={[msg('assistant', '')]} currentStep="Fetching your mistakes..." />
     )
     expect(screen.getByText('Fetching your mistakes...')).toBeInTheDocument()
   })
@@ -102,10 +99,7 @@ describe('MessageList', () => {
 
   it('does not render a balloon when content is empty but currentStep is set', () => {
     render(
-      <MessageList
-        messages={[msg('assistant', '')]}
-        currentStep="Analyzing your message..."
-      />
+      <MessageList messages={[msg('assistant', '')]} currentStep="Analyzing your message..." />
     )
     expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
     expect(screen.queryByTestId('message-balloon')).toBeNull()
@@ -115,11 +109,7 @@ describe('MessageList', () => {
   it('renders the thinking step only above the last assistant message', () => {
     render(
       <MessageList
-        messages={[
-          msg('assistant', 'First reply'),
-          msg('user', 'Follow up'),
-          msg('assistant', ''),
-        ]}
+        messages={[msg('assistant', 'First reply'), msg('user', 'Follow up'), msg('assistant', '')]}
         currentStep="Analyzing your message..."
       />
     )

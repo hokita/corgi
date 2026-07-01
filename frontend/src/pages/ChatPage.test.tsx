@@ -75,9 +75,7 @@ describe('ChatPage error toasts', () => {
     fireEvent.click(screen.getByText('☰'))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
-    await waitFor(() =>
-      expect(screen.getByText('Failed to load messages')).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText('Failed to load messages')).toBeInTheDocument())
   })
 
   it('shows "Failed to delete conversation" when deleteConversation rejects', async () => {
@@ -95,18 +93,14 @@ describe('ChatPage error toasts', () => {
   })
 
   it('shows backend error message when stream emits an error event', async () => {
-    mockApi.createConversation.mockImplementation(
-      (_msg: string, callbacks: StreamCallbacks) => {
-        callbacks.onError('Title generation failed')
-        return Promise.resolve()
-      }
-    )
+    mockApi.createConversation.mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+      callbacks.onError('Title generation failed')
+      return Promise.resolve()
+    })
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
     fireEvent.click(screen.getByText('↑'))
-    await waitFor(() =>
-      expect(screen.getByText('Title generation failed')).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText('Title generation failed')).toBeInTheDocument())
   })
 
   it('shows "Failed to send message" when stream request throws', async () => {
@@ -114,8 +108,6 @@ describe('ChatPage error toasts', () => {
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
     fireEvent.click(screen.getByText('↑'))
-    await waitFor(() =>
-      expect(screen.getByText('Failed to send message')).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText('Failed to send message')).toBeInTheDocument())
   })
 })
