@@ -1,6 +1,11 @@
 import type { Request, Response, NextFunction } from 'express'
 import { getAuth } from 'firebase-admin/auth'
 
+export function requireUid(req: { uid?: string }): string {
+  if (!req.uid) throw new Error('authMiddleware did not set req.uid')
+  return req.uid
+}
+
 export async function authMiddleware(
   req: Request,
   res: Response,

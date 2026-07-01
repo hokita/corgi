@@ -1,97 +1,15 @@
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
-import type { Content, Part, Tool, ToolConfig } from '@google/generative-ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import type {
+  Content,
+  EnhancedGenerateContentResponse,
+  Part,
+  Tool,
+  ToolConfig,
+} from '@google/generative-ai'
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
-
-const functionTools = {
-  functionDeclarations: [
-    {
-      name: 'suggest_options',
-      description:
-        'Call at the end of your response to suggest next steps or options for the user to choose from as buttons.',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          items: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
-            description: '2 to 4 short button labels',
-          },
-        },
-        required: ['items'],
-      },
-    },
-    {
-      name: 'save_english_mistake',
-      description:
-        "Save an English learning point when the user's message contains a grammar mistake, unnatural phrasing, wrong preposition, article error, or word choice issue worth reviewing later — OR when the message is grammatically correct but a native speaker would naturally phrase it differently. Only call for genuinely valuable learning points — skip trivial typos or very minor issues.",
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          originalText: {
-            type: SchemaType.STRING,
-            description: "The user's original phrasing",
-          },
-          correctedText: {
-            type: SchemaType.STRING,
-            description: 'The improved, natural English version',
-          },
-          category: {
-            type: SchemaType.STRING,
-            description: 'One of: grammar, word-choice, preposition, article, phrasing',
-          },
-          severity: {
-            type: SchemaType.STRING,
-            description: 'One of: low, medium, high',
-          },
-          patternKey: {
-            type: SchemaType.STRING,
-            description: 'A reusable snake_case pattern identifier, e.g. by_gerund_for_method',
-          },
-          type: {
-            type: SchemaType.STRING,
-            description:
-              '"mistake" if the original was grammatically wrong, "suggestion" if it was already correct but could sound more natural',
-          },
-        },
-        required: ['originalText', 'correctedText', 'category', 'severity', 'patternKey', 'type'],
-      },
-    },
-    {
-      name: 'get_english_mistakes',
-      description:
-        'Fetch the user\'s saved English learning points from the database. Call this when the user asks to review their mistakes, e.g. "show me today\'s mistakes" or "review my grammar errors this week".',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          startDate: {
-            type: SchemaType.STRING,
-            description: 'ISO date string (YYYY-MM-DD) for the start of the date range, inclusive',
-          },
-          endDate: {
-            type: SchemaType.STRING,
-            description: 'ISO date string (YYYY-MM-DD) for the end of the date range, inclusive',
-          },
-          category: {
-            type: SchemaType.STRING,
-            description:
-              'Filter by category: grammar, word-choice, preposition, article, or phrasing',
-          },
-        },
-        required: [],
-      },
-    },
-    {
-      name: 'get_hacker_news_briefing',
-      description:
-        'Fetch the current Hacker News front page and render a "Morning Coffee Briefing". Call when the user asks for HN news, a morning briefing, or a tech news digest.',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {},
-        required: [],
-      },
-    },
-  ],
-}
+import { GEMINI_CHAT_MODEL } from '../config/gemini'
+import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
+import { chatFunctionDeclarations } from '../tools/registry'
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -99,6 +17,27 @@ export interface GeminiProviderOptions {
 
 function currentJstDatetime(): string {
   return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Tokyo' }).replace('T', ' ') + ' JST'
+}
+
+function toGeminiHistory(history: Message[]): Content[] {
+  return history.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+}
+
+function parseSuggestOptionsItems(args: unknown): string[] | undefined {
+  const items = (args as { items?: string[] } | undefined)?.items
+  return Array.isArray(items) && items.length > 0 ? items : undefined
+}
+
+// The SDK's ToolConfig doesn't model this field; it is required when mixing
+// built-in tools (googleSearch) with function calling.
+const SERVER_SIDE_TOOL_CONFIG = { includeServerSideToolInvocations: true } as unknown as ToolConfig
+
+interface StreamState {
+  suggestions?: string[]
+  hasText: boolean
 }
 
 export class GeminiProvider implements AIProvider {
@@ -110,82 +49,92 @@ export class GeminiProvider implements AIProvider {
     this.client = new GoogleGenerativeAI(apiKey)
   }
 
-  async *chatStream(
-    history: Message[],
-    newMessage: string,
-    executeFn: FunctionExecutor
-  ): AsyncIterable<StreamItem> {
-    const model = this.client.getGenerativeModel({
-      model: 'gemini-3.5-flash',
-      systemInstruction:
-        `The current date and time is ${currentJstDatetime()}. ` +
-        'You are a helpful assistant. When the user is exploring or brainstorming, respond thoughtfully and call `suggest_options` with 2–4 thought-provoking follow-up questions that deepen their thinking. In other contexts, call `suggest_options` with 2–4 useful next steps or options. Additionally, when the user sends a message in English, silently analyze it for grammar mistakes, unnatural phrasing, wrong prepositions, article errors, or word choice issues, AND for sentences that are grammatically correct but that a native speaker would phrase more naturally. If you find a valuable learning point (not a trivial typo), call `save_english_mistake` with `type: "mistake"` for genuine errors or `type: "suggestion"` for correct-but-unnatural phrasing. For `type: "mistake"`, do not mention the correction in your reply unless the user explicitly asks about their English. For `type: "suggestion"`, briefly weave a friendly one-line aside into the end of your reply suggesting the more natural phrasing — keep it short and don\'t let it overshadow your main answer. When the user asks to review their English mistakes (e.g. "show me today\'s mistakes"), call `get_english_mistakes` with appropriate date and category filters. When showing corrections, always use the plain Unicode arrow → instead of LaTeX notation like $\\rightarrow$. When the user asks for Hacker News, a morning briefing, or a tech news digest, call `get_hacker_news_briefing` and format your reply exactly per the instructions returned in that function\'s response.',
-    })
-    const tools: Tool[] = [functionTools as Tool]
-    if (this.googleSearch) tools.push({ googleSearch: {} } as unknown as Tool)
-    const chat = model.startChat({
-      history: history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      })),
-      tools,
-      // Required when mixing built-in tools (googleSearch) with function calling
-      ...(this.googleSearch && {
-        toolConfig: { includeServerSideToolInvocations: true } as never,
-      }),
-    })
-    const result = await chat.sendMessageStream(newMessage)
-
-    let suggestOptionsItems: string[] | undefined
-    let hasText = false
-    const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
-    // Capture raw parts from the stream. The SDK's ChatSession strips
-    // thought_signature when merging chunks into its internal history, so we
-    // preserve the raw parts ourselves for use in the follow-up call.
-    const rawModelParts: Part[] = []
-
-    for await (const chunk of result.stream) {
-      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
-        rawModelParts.push(part)
+  // Shared chunk loop for the primary and follow-up streams. The two passes
+  // differ only via hooks: the primary pass captures raw parts (rawParts) and
+  // executes non-suggest function calls (onFunctionCall); the follow-up pass
+  // passes no hooks, so such calls are ignored and its text still streams.
+  private async *emitTextFromStream(
+    stream: AsyncIterable<EnhancedGenerateContentResponse>,
+    state: StreamState,
+    hooks: {
+      rawParts?: Part[]
+      onFunctionCall?: (name: string, args: unknown) => Promise<void>
+    } = {}
+  ): AsyncIterable<string> {
+    for await (const chunk of stream) {
+      if (hooks.rawParts) {
+        for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+          hooks.rawParts.push(part)
+        }
       }
       let hasFunctionCall = false
       for (const candidate of chunk.candidates ?? []) {
         for (const part of candidate.content?.parts ?? []) {
-          if ('functionCall' in part) {
-            const { name, args } = part.functionCall as { name: string; args: unknown }
-            if (name === 'suggest_options') {
-              hasFunctionCall = true
-              const items = (args as { items?: string[] }).items
-              if (Array.isArray(items) && items.length > 0) {
-                suggestOptionsItems = items
-              }
-            } else {
-              hasFunctionCall = true
-              const response = await executeFn(name, args)
-              pendingFunctionResponses.push({ name, response })
-            }
+          if (!('functionCall' in part) || !part.functionCall) continue
+          const { name, args } = part.functionCall
+          if (name === 'suggest_options') {
+            hasFunctionCall = true
+            const items = parseSuggestOptionsItems(args)
+            if (items) state.suggestions = items
+          } else if (hooks.onFunctionCall) {
+            hasFunctionCall = true
+            await hooks.onFunctionCall(name, args)
           }
         }
       }
       if (!hasFunctionCall) {
         const text = chunk.text()
         if (text) {
-          hasText = true
+          state.hasText = true
           yield text
         }
       }
     }
+  }
+
+  async *chatStream(
+    history: Message[],
+    newMessage: string,
+    executeFn: FunctionExecutor
+  ): AsyncIterable<StreamItem> {
+    const model = this.client.getGenerativeModel({
+      model: GEMINI_CHAT_MODEL,
+      systemInstruction:
+        `The current date and time is ${currentJstDatetime()}. ` + CHAT_SYSTEM_PROMPT,
+    })
+    const tools: Tool[] = [{ functionDeclarations: chatFunctionDeclarations }]
+    // The SDK's Tool union doesn't include googleSearch
+    if (this.googleSearch) tools.push({ googleSearch: {} } as unknown as Tool)
+    const chat = model.startChat({
+      history: toGeminiHistory(history),
+      tools,
+      // Required when mixing built-in tools (googleSearch) with function calling
+      ...(this.googleSearch && { toolConfig: SERVER_SIDE_TOOL_CONFIG }),
+    })
+    const result = await chat.sendMessageStream(newMessage)
+
+    const state: StreamState = { hasText: false }
+    const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
+    // Capture raw parts from the stream. The SDK's ChatSession strips
+    // thought_signature when merging chunks into its internal history, so we
+    // preserve the raw parts ourselves for use in the follow-up call.
+    const rawModelParts: Part[] = []
+
+    yield* this.emitTextFromStream(result.stream, state, {
+      rawParts: rawModelParts,
+      onFunctionCall: async (name, args) => {
+        const response = await executeFn(name, args)
+        pendingFunctionResponses.push({ name, response })
+      },
+    })
 
     // If Gemini only called functions and generated no text, send function results
     // back so Gemini produces its text response. Use model.generateContentStream
     // with manually-built history (not chat.sendMessageStream) so the raw model
     // parts — including thought_signature — are preserved in the request.
-    if (pendingFunctionResponses.length > 0 && !hasText) {
+    if (pendingFunctionResponses.length > 0 && !state.hasText) {
       const manualHistory: Content[] = [
-        ...history.map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        })),
+        ...toGeminiHistory(history),
         { role: 'user', parts: [{ text: newMessage }] },
         { role: 'model', parts: rawModelParts },
         {
@@ -198,33 +147,13 @@ export class GeminiProvider implements AIProvider {
       const followUp = await model.generateContentStream({
         contents: manualHistory,
         tools,
-        toolConfig: { includeServerSideToolInvocations: true } as unknown as ToolConfig,
+        toolConfig: SERVER_SIDE_TOOL_CONFIG,
       })
-      for await (const chunk of followUp.stream) {
-        let hasFunctionCall = false
-        for (const candidate of chunk.candidates ?? []) {
-          for (const part of candidate.content?.parts ?? []) {
-            if ('functionCall' in part) {
-              const { name, args } = part.functionCall as { name: string; args: unknown }
-              if (name === 'suggest_options') {
-                hasFunctionCall = true
-                const items = (args as { items?: string[] }).items
-                if (Array.isArray(items) && items.length > 0) {
-                  suggestOptionsItems = items
-                }
-              }
-            }
-          }
-        }
-        if (!hasFunctionCall) {
-          const text = chunk.text()
-          if (text) yield text
-        }
-      }
+      yield* this.emitTextFromStream(followUp.stream, state)
     }
 
-    if (suggestOptionsItems) {
-      yield { type: 'suggestions', items: suggestOptionsItems }
+    if (state.suggestions) {
+      yield { type: 'suggestions', items: state.suggestions }
     }
   }
 }

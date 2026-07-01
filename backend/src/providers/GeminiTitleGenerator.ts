@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { TitleGenerator } from './AIProvider'
+import { GEMINI_TITLE_MODEL } from '../config/gemini'
 
 export class GeminiTitleGenerator implements TitleGenerator {
   private client: GoogleGenerativeAI
@@ -10,7 +11,7 @@ export class GeminiTitleGenerator implements TitleGenerator {
 
   async generateTitle(message: string): Promise<string> {
     try {
-      const model = this.client.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+      const model = this.client.getGenerativeModel({ model: GEMINI_TITLE_MODEL })
       const prompt =
         `Generate a short title (max 50 characters, no quotes, no punctuation at end) ` +
         `for a conversation that starts with this message: "${message}"\n` +

@@ -70,11 +70,14 @@ export async function getMessages(conversationId: string): Promise<FirestoreMess
     .orderBy('createdAt', 'asc')
     .get()
   return snap.docs.map((d) => {
-    const data = d.data()
+    const data = d.data() as Omit<FirestoreMessage, 'createdAt' | 'suggestions'> & {
+      createdAt: Timestamp
+      suggestions?: unknown
+    }
     const msg: FirestoreMessage = {
-      role: data.role as 'user' | 'assistant',
-      content: data.content as string,
-      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+      role: data.role,
+      content: data.content,
+      createdAt: data.createdAt.toDate().toISOString(),
     }
     if (Array.isArray(data.suggestions)) msg.suggestions = data.suggestions as string[]
     return msg
@@ -125,20 +128,24 @@ export async function listEnglishMistakes(
   }
 
   const snap = await query.limit(params.limit ?? 50).get()
-  let docs = snap.docs.map((d) => {
-    const data = d.data()
+  let docs = snap.docs.map((d): EnglishMistakeDoc => {
+    // Pick fields explicitly — spreading d.data() would leak stray Firestore
+    // fields into the function-call response sent to Gemini.
+    const data = d.data() as Omit<EnglishMistakeDoc, 'id' | 'createdAt'> & {
+      createdAt: Timestamp
+    }
     return {
       id: d.id,
-      uid: data.uid as string,
-      conversationId: data.conversationId as string,
-      originalText: data.originalText as string,
-      correctedText: data.correctedText as string,
-      category: data.category as string,
-      severity: data.severity as string,
-      patternKey: data.patternKey as string,
-      type: data.type as EnglishMistakeDoc['type'],
-      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-    } as EnglishMistakeDoc
+      uid: data.uid,
+      conversationId: data.conversationId,
+      originalText: data.originalText,
+      correctedText: data.correctedText,
+      category: data.category,
+      severity: data.severity,
+      patternKey: data.patternKey,
+      type: data.type,
+      createdAt: data.createdAt.toDate().toISOString(),
+    }
   })
 
   if (params.category) {

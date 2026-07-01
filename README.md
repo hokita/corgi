@@ -8,7 +8,7 @@ Personal AI chat app backed by Gemini, built on GCP and Firebase.
 |---|---|
 | Frontend | React 18, Vite, TypeScript, Tailwind CSS v4, Firebase Auth |
 | Backend | Node.js 24, Express, TypeScript |
-| AI | Gemini 2.5 Flash Lite (`@google/generative-ai`) |
+| AI | Gemini via `@google/generative-ai` — `gemini-3.5-flash` for chat, `gemini-2.5-flash-lite` for titles (see `backend/src/config/gemini.ts`) |
 | Storage | Firestore (conversation history) |
 | Hosting | Firebase Hosting (frontend) + Cloud Run (backend) |
 
@@ -46,7 +46,7 @@ cd backend && npm test
 cd frontend && npm test
 ```
 
-21 tests total (17 backend, 4 frontend).
+Both packages run Vitest; CI runs lint, typecheck, and tests on every PR.
 
 ## Deploy
 
