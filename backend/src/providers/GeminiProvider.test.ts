@@ -248,9 +248,7 @@ describe('GeminiProvider', () => {
 
     const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ result: 'saved' })
     const provider = new GeminiProvider('fake-key')
-    await collectStream(
-      provider.chatStream([], 'I am looking forward to see you.', executeFn)
-    )
+    await collectStream(provider.chatStream([], 'I am looking forward to see you.', executeFn))
 
     expect(executeFn).toHaveBeenCalledWith('save_english_mistake', suggestionData)
   })
