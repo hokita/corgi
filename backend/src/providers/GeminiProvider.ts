@@ -1,7 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, FunctionCallingMode } from '@google/generative-ai'
 import type {
   Content,
   EnhancedGenerateContentResponse,
+  GenerativeModel,
   Part,
   Tool,
   ToolConfig,
@@ -9,7 +10,11 @@ import type {
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
 import { GEMINI_CHAT_MODEL } from '../config/gemini'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
-import { chatFunctionDeclarations } from '../tools/registry'
+import {
+  chatFunctionDeclarations,
+  suggestOptionsDeclaration,
+  SUGGEST_OPTIONS_TOOL_NAME,
+} from '../tools/registry'
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -38,6 +43,8 @@ const SERVER_SIDE_TOOL_CONFIG = { includeServerSideToolInvocations: true } as un
 interface StreamState {
   suggestions?: string[]
   hasText: boolean
+  // Full answer text, accumulated so the fallback suggestions call can see it
+  text: string
 }
 
 // Thinking models stream thought-summary parts: regular text parts flagged
@@ -114,6 +121,7 @@ export class GeminiProvider implements AIProvider {
         const text = visibleText(chunk)
         if (text) {
           state.hasText = true
+          state.text += text
           yield text
         }
       }
@@ -141,7 +149,7 @@ export class GeminiProvider implements AIProvider {
     })
     const result = await chat.sendMessageStream(newMessage)
 
-    const state: StreamState = { hasText: false }
+    const state: StreamState = { hasText: false, text: '' }
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
     let executedToolCall = false
     // Capture raw parts from the stream. The SDK's ChatSession strips
@@ -194,8 +202,64 @@ export class GeminiProvider implements AIProvider {
       yield* this.emitTextFromStream(followUp.stream, state)
     }
 
+    // The prompt asks for suggest_options on every reply, but the model can
+    // still skip it. Guarantee suggestions by forcing the call in a small
+    // follow-up request when the answer arrived without one.
+    if (!state.suggestions && state.hasText) {
+      state.suggestions = await this.fetchFallbackSuggestions(
+        model,
+        history,
+        newMessage,
+        state.text
+      )
+    }
+
     if (state.suggestions) {
       yield { type: 'suggestions', items: state.suggestions }
     }
+  }
+
+  // Forces a suggest_options call (toolConfig mode ANY) so every answer gets
+  // suggestions even when the main turn didn't produce them. Failures are
+  // swallowed: suggestions are an enhancement and must not break the reply.
+  private async fetchFallbackSuggestions(
+    model: GenerativeModel,
+    history: Message[],
+    newMessage: string,
+    answerText: string
+  ): Promise<string[] | undefined> {
+    try {
+      const contents: Content[] = [
+        ...toGeminiHistory(history),
+        { role: 'user', parts: [{ text: newMessage }] },
+        { role: 'model', parts: [{ text: answerText }] },
+        {
+          role: 'user',
+          parts: [
+            {
+              text: 'Call suggest_options with 2 to 4 short follow-up options the user is most likely to want next in this conversation.',
+            },
+          ],
+        },
+      ]
+      const result = await model.generateContent({
+        contents,
+        tools: [{ functionDeclarations: [suggestOptionsDeclaration] }],
+        toolConfig: {
+          functionCallingConfig: {
+            mode: FunctionCallingMode.ANY,
+            allowedFunctionNames: [SUGGEST_OPTIONS_TOOL_NAME],
+          },
+        },
+      })
+      for (const part of result.response.candidates?.[0]?.content?.parts ?? []) {
+        if (part.functionCall?.name === SUGGEST_OPTIONS_TOOL_NAME) {
+          return parseSuggestOptionsItems(part.functionCall.args)
+        }
+      }
+    } catch (err) {
+      console.error('[GeminiProvider] fallback suggest_options call failed:', err)
+    }
+    return undefined
   }
 }
