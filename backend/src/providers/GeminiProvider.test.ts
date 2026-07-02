@@ -343,6 +343,85 @@ describe('GeminiProvider', () => {
           response: { result: 'displayed' },
         },
       },
+      { text: expect.stringContaining('suggest_options') },
+    ])
+  })
+
+  it('appends a suggest_options reminder text part after the function responses', async () => {
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => 'Briefing text', candidates: undefined }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    type ContentTurn = { role: string; parts: unknown[] }
+    const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
+    const responseTurn = followUpArg.contents[followUpArg.contents.length - 1]
+    expect(responseTurn.role).toBe('user')
+    expect(responseTurn.parts[responseTurn.parts.length - 1]).toEqual({
+      text: expect.stringContaining('end your turn by calling the `suggest_options` function'),
+    })
+  })
+
+  it('yields suggestions when suggest_options is called in the follow-up stream', async () => {
+    async function* firstStream() {
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield { text: () => '# ☕ Morning Coffee Briefing', candidates: undefined }
+      yield {
+        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    name: 'suggest_options',
+                    args: { items: ['More on: Rust async', 'More on: YC stats'] },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(items).toEqual([
+      '# ☕ Morning Coffee Briefing',
+      { type: 'suggestions', items: ['More on: Rust async', 'More on: YC stats'] },
     ])
   })
 

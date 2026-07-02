@@ -40,6 +40,14 @@ interface StreamState {
   hasText: boolean
 }
 
+// Appended after the functionResponse parts in the follow-up request. Right
+// after consuming a large tool response the model tends to skip trailing
+// function calls (or write the button labels as plain text), so the
+// instruction is repeated at the very end of the context.
+const FOLLOW_UP_REMINDER =
+  'Reminder: after your text reply, end your turn by calling the `suggest_options` function. ' +
+  'It must be a real function call — never write the button labels as plain text.'
+
 export class GeminiProvider implements AIProvider {
   private client: GoogleGenerativeAI
   private googleSearch: boolean
@@ -152,9 +160,12 @@ export class GeminiProvider implements AIProvider {
         { role: 'model', parts: rawModelParts },
         {
           role: 'user',
-          parts: pendingFunctionResponses.map((r) => ({
-            functionResponse: { name: r.name, response: r.response as object },
-          })),
+          parts: [
+            ...pendingFunctionResponses.map((r) => ({
+              functionResponse: { name: r.name, response: r.response as object },
+            })),
+            { text: FOLLOW_UP_REMINDER },
+          ],
         },
       ]
       const followUp = await model.generateContentStream({
