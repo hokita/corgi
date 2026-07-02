@@ -129,6 +129,41 @@ describe('GeminiProvider', () => {
     expect(items).toEqual(['answer'])
   })
 
+  it('throws when a chunk reports a blocked finishReason', async () => {
+    // chunk.text() used to throw on SAFETY/RECITATION/LANGUAGE; visibleText()
+    // must not turn those into a silently truncated successful stream.
+    async function* fakeStream() {
+      yield textChunk('The story begins')
+      yield { candidates: [{ finishReason: 'RECITATION', content: { parts: [] } }] }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await expect(collectStream(provider.chatStream([], 'Hi', noopExecutor))).rejects.toThrow(
+      'finishReason RECITATION'
+    )
+  })
+
+  it('throws when prompt feedback reports a block', async () => {
+    async function* fakeStream() {
+      yield { candidates: undefined, promptFeedback: { blockReason: 'SAFETY' } }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await expect(collectStream(provider.chatStream([], 'Hi', noopExecutor))).rejects.toThrow(
+      'blocked: SAFETY'
+    )
+  })
+
+  it('does not throw on benign finish reasons', async () => {
+    async function* fakeStream() {
+      yield { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'done' }] } }] }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toEqual(['done'])
+  })
+
   it('yields suggestions item when Gemini calls suggest_options', async () => {
     async function* fakeStream() {
       yield textChunk('Here are your options.')
@@ -453,6 +488,17 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
+      // The production incident was thought text leaking in the follow-up
+      // stream, so pin the filtering on this pass too.
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "Let's process the raw stories...", thought: true }],
+            },
+          },
+        ],
+      }
       yield textChunk('# ☕ Morning Coffee Briefing')
       yield {
         candidates: [

@@ -50,6 +50,21 @@ function visibleText(chunk: EnhancedGenerateContentResponse): string {
     .join('')
 }
 
+// chunk.text() used to throw on these; visibleText() doesn't, so blocked
+// responses must be surfaced here or they end the stream silently and a
+// truncated message gets persisted as if it succeeded.
+const BAD_FINISH_REASONS = ['SAFETY', 'RECITATION', 'LANGUAGE']
+
+function assertChunkNotBlocked(chunk: EnhancedGenerateContentResponse): void {
+  const finishReason = chunk.candidates?.[0]?.finishReason
+  if (finishReason && BAD_FINISH_REASONS.includes(finishReason)) {
+    throw new Error(`Gemini response was blocked: finishReason ${finishReason}`)
+  }
+  if (chunk.promptFeedback?.blockReason) {
+    throw new Error(`Gemini request was blocked: ${chunk.promptFeedback.blockReason}`)
+  }
+}
+
 export class GeminiProvider implements AIProvider {
   private client: GoogleGenerativeAI
   private googleSearch: boolean
@@ -73,6 +88,7 @@ export class GeminiProvider implements AIProvider {
     } = {}
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
+      assertChunkNotBlocked(chunk)
       if (hooks.rawParts) {
         for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
           hooks.rawParts.push(part)
