@@ -30,6 +30,10 @@ async function collectStream(stream: AsyncIterable<StreamItem>): Promise<StreamI
   return items
 }
 
+function textChunk(text: string) {
+  return { candidates: [{ content: { parts: [{ text }] } }] }
+}
+
 describe('GeminiProvider', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -39,7 +43,7 @@ describe('GeminiProvider', () => {
     vi.setSystemTime(new Date('2026-06-27T10:00:00.000Z'))
 
     async function* fakeStream() {
-      yield { text: () => 'reply', candidates: undefined }
+      yield textChunk('reply')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
 
@@ -57,8 +61,8 @@ describe('GeminiProvider', () => {
 
   it('yields text chunks from Gemini stream', async () => {
     async function* fakeStream() {
-      yield { text: () => 'Hello', candidates: undefined }
-      yield { text: () => ' world', candidates: undefined }
+      yield textChunk('Hello')
+      yield textChunk(' world')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
@@ -68,7 +72,7 @@ describe('GeminiProvider', () => {
 
   it('maps assistant role to "model" when building history', async () => {
     async function* fakeStream() {
-      yield { text: () => 'reply', candidates: undefined }
+      yield textChunk('reply')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
@@ -94,9 +98,9 @@ describe('GeminiProvider', () => {
 
   it('skips empty text chunks', async () => {
     async function* fakeStream() {
-      yield { text: () => 'Hello', candidates: undefined }
-      yield { text: () => '', candidates: undefined }
-      yield { text: () => ' world', candidates: undefined }
+      yield textChunk('Hello')
+      yield textChunk('')
+      yield textChunk(' world')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
@@ -104,11 +108,66 @@ describe('GeminiProvider', () => {
     expect(items).toEqual(['Hello', ' world'])
   })
 
+  it('does not stream thought parts as visible text', async () => {
+    async function* fakeStream() {
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: "Let's plan the reply step by step...", thought: true },
+                { text: 'answer' },
+              ],
+            },
+          },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toEqual(['answer'])
+  })
+
+  it('throws when a chunk reports a blocked finishReason', async () => {
+    // chunk.text() used to throw on SAFETY/RECITATION/LANGUAGE; visibleText()
+    // must not turn those into a silently truncated successful stream.
+    async function* fakeStream() {
+      yield textChunk('The story begins')
+      yield { candidates: [{ finishReason: 'RECITATION', content: { parts: [] } }] }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await expect(collectStream(provider.chatStream([], 'Hi', noopExecutor))).rejects.toThrow(
+      'finishReason RECITATION'
+    )
+  })
+
+  it('throws when prompt feedback reports a block', async () => {
+    async function* fakeStream() {
+      yield { candidates: undefined, promptFeedback: { blockReason: 'SAFETY' } }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await expect(collectStream(provider.chatStream([], 'Hi', noopExecutor))).rejects.toThrow(
+      'blocked: SAFETY'
+    )
+  })
+
+  it('does not throw on benign finish reasons', async () => {
+    async function* fakeStream() {
+      yield { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'done' }] } }] }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toEqual(['done'])
+  })
+
   it('yields suggestions item when Gemini calls suggest_options', async () => {
     async function* fakeStream() {
-      yield { text: () => 'Here are your options.', candidates: undefined }
+      yield textChunk('Here are your options.')
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -136,7 +195,7 @@ describe('GeminiProvider', () => {
 
   it('includes googleSearch tool when googleSearch option is true', async () => {
     async function* fakeStream() {
-      yield { text: () => 'result', candidates: undefined }
+      yield textChunk('result')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key', { googleSearch: true })
@@ -150,7 +209,7 @@ describe('GeminiProvider', () => {
 
   it('excludes googleSearch tool when googleSearch option is false', async () => {
     async function* fakeStream() {
-      yield { text: () => 'result', candidates: undefined }
+      yield textChunk('result')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key', { googleSearch: false })
@@ -164,7 +223,7 @@ describe('GeminiProvider', () => {
 
   it('excludes googleSearch tool by default', async () => {
     async function* fakeStream() {
-      yield { text: () => 'result', candidates: undefined }
+      yield textChunk('result')
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
@@ -194,12 +253,11 @@ describe('GeminiProvider', () => {
     }
     async function* firstStream() {
       yield {
-        text: () => '',
         candidates: [{ content: { parts: [rawFunctionCallPart] } }],
       }
     }
     async function* followUpStream() {
-      yield { text: () => 'Great effort! Keep practicing.', candidates: undefined }
+      yield textChunk('Great effort! Keep practicing.')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
@@ -236,12 +294,11 @@ describe('GeminiProvider', () => {
     }
     async function* firstStream() {
       yield {
-        text: () => '',
         candidates: [{ content: { parts: [rawFunctionCallPart] } }],
       }
     }
     async function* followUpStream() {
-      yield { text: () => 'Sounds great! (More natural: ... → ...)', candidates: undefined }
+      yield textChunk('Sounds great! (More natural: ... → ...)')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
@@ -258,7 +315,6 @@ describe('GeminiProvider', () => {
     const mistakes = [{ id: 'm1', originalText: 'I go', correctedText: 'I went' }]
     async function* firstStream() {
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -269,7 +325,7 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      yield { text: () => 'Here are your mistakes for today.', candidates: undefined }
+      yield textChunk('Here are your mistakes for today.')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
@@ -297,7 +353,6 @@ describe('GeminiProvider', () => {
     // or the API rejects the request.
     async function* firstStream() {
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -311,7 +366,7 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      yield { text: () => '# ☕ Morning Coffee Briefing', candidates: undefined }
+      yield textChunk('# ☕ Morning Coffee Briefing')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
@@ -343,14 +398,15 @@ describe('GeminiProvider', () => {
           response: { result: 'displayed' },
         },
       },
-      { text: expect.stringContaining('suggest_options') },
     ])
   })
 
-  it('appends a suggest_options reminder text part after the function responses', async () => {
+  it('sends only functionResponse parts in the follow-up user turn', async () => {
+    // Regression: mixing a text part into the functionResponse turn disrupts the
+    // thinking model's turn continuation and makes it write its reasoning as
+    // visible reply text.
     async function* firstStream() {
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -361,7 +417,7 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      yield { text: () => 'Briefing text', candidates: undefined }
+      yield textChunk('Briefing text')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
@@ -374,15 +430,28 @@ describe('GeminiProvider', () => {
     const followUpArg = mockGenerateContentStream.mock.calls[0][0] as { contents: ContentTurn[] }
     const responseTurn = followUpArg.contents[followUpArg.contents.length - 1]
     expect(responseTurn.role).toBe('user')
-    expect(responseTurn.parts[responseTurn.parts.length - 1]).toEqual({
-      text: expect.stringContaining('end your turn by calling the `suggest_options` function'),
-    })
+    expect(responseTurn.parts).toEqual([
+      {
+        functionResponse: {
+          name: 'get_hacker_news_briefing',
+          response: { stories: [] },
+        },
+      },
+    ])
   })
 
-  it('yields suggestions when suggest_options is called in the follow-up stream', async () => {
+  it('still triggers the follow-up when the primary turn has only thoughts and a tool call', async () => {
     async function* firstStream() {
       yield {
-        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ text: 'Thinking about which tool to use...', thought: true }],
+            },
+          },
+        ],
+      }
+      yield {
         candidates: [
           {
             content: {
@@ -393,9 +462,45 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      yield { text: () => '# ☕ Morning Coffee Briefing', candidates: undefined }
+      yield textChunk('# ☕ Morning Coffee Briefing')
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
+    expect(items).toEqual(['# ☕ Morning Coffee Briefing'])
+  })
+
+  it('yields suggestions when suggest_options is called in the follow-up stream', async () => {
+    async function* firstStream() {
       yield {
-        text: () => '',
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      // The production incident was thought text leaking in the follow-up
+      // stream, so pin the filtering on this pass too.
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "Let's process the raw stories...", thought: true }],
+            },
+          },
+        ],
+      }
+      yield textChunk('# ☕ Morning Coffee Briefing')
+      yield {
         candidates: [
           {
             content: {
@@ -428,7 +533,6 @@ describe('GeminiProvider', () => {
   it('does not make a follow-up call when only suggest_options was called', async () => {
     async function* fakeStream() {
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -448,7 +552,6 @@ describe('GeminiProvider', () => {
   it('calls executeFn for unknown function calls', async () => {
     async function* fakeStream() {
       yield {
-        text: () => '',
         candidates: [
           {
             content: {
@@ -459,7 +562,7 @@ describe('GeminiProvider', () => {
       }
     }
     async function* followUpStream() {
-      yield { text: () => 'Done.', candidates: undefined }
+      yield textChunk('Done.')
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: fakeStream() })
     mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })

@@ -40,13 +40,30 @@ interface StreamState {
   hasText: boolean
 }
 
-// Appended after the functionResponse parts in the follow-up request. Right
-// after consuming a large tool response the model tends to skip trailing
-// function calls (or write the button labels as plain text), so the
-// instruction is repeated at the very end of the context.
-const FOLLOW_UP_REMINDER =
-  'Reminder: after your text reply, end your turn by calling the `suggest_options` function. ' +
-  'It must be a real function call — never write the button labels as plain text.'
+// Thinking models stream thought-summary parts: regular text parts flagged
+// thought: true. The legacy SDK predates them (chunk.text() would concatenate
+// them into the answer), so text is extracted here with thoughts skipped.
+function visibleText(chunk: EnhancedGenerateContentResponse): string {
+  return (chunk.candidates?.[0]?.content?.parts ?? [])
+    .filter((p) => typeof p.text === 'string' && !(p as { thought?: boolean }).thought)
+    .map((p) => p.text)
+    .join('')
+}
+
+// chunk.text() used to throw on these; visibleText() doesn't, so blocked
+// responses must be surfaced here or they end the stream silently and a
+// truncated message gets persisted as if it succeeded.
+const BAD_FINISH_REASONS = ['SAFETY', 'RECITATION', 'LANGUAGE']
+
+function assertChunkNotBlocked(chunk: EnhancedGenerateContentResponse): void {
+  const finishReason = chunk.candidates?.[0]?.finishReason
+  if (finishReason && BAD_FINISH_REASONS.includes(finishReason)) {
+    throw new Error(`Gemini response was blocked: finishReason ${finishReason}`)
+  }
+  if (chunk.promptFeedback?.blockReason) {
+    throw new Error(`Gemini request was blocked: ${chunk.promptFeedback.blockReason}`)
+  }
+}
 
 export class GeminiProvider implements AIProvider {
   private client: GoogleGenerativeAI
@@ -71,6 +88,7 @@ export class GeminiProvider implements AIProvider {
     } = {}
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
+      assertChunkNotBlocked(chunk)
       if (hooks.rawParts) {
         for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
           hooks.rawParts.push(part)
@@ -93,7 +111,7 @@ export class GeminiProvider implements AIProvider {
         }
       }
       if (!hasFunctionCall) {
-        const text = chunk.text()
+        const text = visibleText(chunk)
         if (text) {
           state.hasText = true
           yield text
@@ -158,14 +176,14 @@ export class GeminiProvider implements AIProvider {
         ...toGeminiHistory(history),
         { role: 'user', parts: [{ text: newMessage }] },
         { role: 'model', parts: rawModelParts },
+        // Only functionResponse parts here: mixing in a text part disrupts the
+        // thinking model's turn continuation and makes it write its reasoning
+        // as visible reply text.
         {
           role: 'user',
-          parts: [
-            ...pendingFunctionResponses.map((r) => ({
-              functionResponse: { name: r.name, response: r.response as object },
-            })),
-            { text: FOLLOW_UP_REMINDER },
-          ],
+          parts: pendingFunctionResponses.map((r) => ({
+            functionResponse: { name: r.name, response: r.response as object },
+          })),
         },
       ]
       const followUp = await model.generateContentStream({
