@@ -59,6 +59,7 @@ export class GeminiProvider implements AIProvider {
     hooks: {
       rawParts?: Part[]
       onFunctionCall?: (name: string, args: unknown) => Promise<void>
+      onSuggestOptionsCall?: () => void
     } = {}
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
@@ -76,6 +77,7 @@ export class GeminiProvider implements AIProvider {
             hasFunctionCall = true
             const items = parseSuggestOptionsItems(args)
             if (items) state.suggestions = items
+            hooks.onSuggestOptionsCall?.()
           } else if (hooks.onFunctionCall) {
             hasFunctionCall = true
             await hooks.onFunctionCall(name, args)
@@ -115,6 +117,7 @@ export class GeminiProvider implements AIProvider {
 
     const state: StreamState = { hasText: false }
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
+    let executedToolCall = false
     // Capture raw parts from the stream. The SDK's ChatSession strips
     // thought_signature when merging chunks into its internal history, so we
     // preserve the raw parts ourselves for use in the follow-up call.
@@ -123,8 +126,18 @@ export class GeminiProvider implements AIProvider {
     yield* this.emitTextFromStream(result.stream, state, {
       rawParts: rawModelParts,
       onFunctionCall: async (name, args) => {
+        executedToolCall = true
         const response = await executeFn(name, args)
         pendingFunctionResponses.push({ name, response })
+      },
+      // The model turn is replayed verbatim in the follow-up call, and the API
+      // requires a functionResponse for every functionCall in it — including
+      // suggest_options, even though it is handled client-side.
+      onSuggestOptionsCall: () => {
+        pendingFunctionResponses.push({
+          name: 'suggest_options',
+          response: { result: 'displayed' },
+        })
       },
     })
 
@@ -132,7 +145,7 @@ export class GeminiProvider implements AIProvider {
     // back so Gemini produces its text response. Use model.generateContentStream
     // with manually-built history (not chat.sendMessageStream) so the raw model
     // parts — including thought_signature — are preserved in the request.
-    if (pendingFunctionResponses.length > 0 && !state.hasText) {
+    if (executedToolCall && !state.hasText) {
       const manualHistory: Content[] = [
         ...toGeminiHistory(history),
         { role: 'user', parts: [{ text: newMessage }] },

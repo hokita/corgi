@@ -141,6 +141,11 @@ export function createFunctionExecutor(ctx: ToolContext): FunctionExecutor {
   return async (name, args) => {
     const tool = toolDefinitions.find((t) => t.declaration.name === name)
     if (!tool) return { error: 'unknown function' }
-    return tool.execute(ctx, args)
+    try {
+      return await tool.execute(ctx, args)
+    } catch (err) {
+      console.error(`[tools] ${name} failed:`, err)
+      return { error: err instanceof Error ? err.message : 'tool execution failed' }
+    }
   }
 }
