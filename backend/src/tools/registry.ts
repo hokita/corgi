@@ -21,7 +21,7 @@ export const SUGGEST_OPTIONS_TOOL_NAME = 'suggest_options'
 
 // Handled inside the AI provider (its items are streamed to the client),
 // so it has no execute entry in the registry below.
-const suggestOptionsDeclaration: FunctionDeclaration = {
+export const suggestOptionsDeclaration: FunctionDeclaration = {
   name: SUGGEST_OPTIONS_TOOL_NAME,
   description:
     'Call at the end of your response to suggest next steps or options for the user to choose from as buttons.',

@@ -3,10 +3,12 @@ import type { StreamItem, FunctionExecutor } from './AIProvider'
 
 const mockSendMessageStream = vi.fn()
 const mockGenerateContentStream = vi.fn()
+const mockGenerateContent = vi.fn()
 const mockStartChat = vi.fn(() => ({ sendMessageStream: mockSendMessageStream }))
 const mockGetGenerativeModel = vi.fn(() => ({
   startChat: mockStartChat,
   generateContentStream: mockGenerateContentStream,
+  generateContent: mockGenerateContent,
 }))
 
 vi.mock('@google/generative-ai', () => ({
@@ -17,6 +19,9 @@ vi.mock('@google/generative-ai', () => ({
     OBJECT: 'object',
     ARRAY: 'array',
     STRING: 'string',
+  },
+  FunctionCallingMode: {
+    ANY: 'ANY',
   },
 }))
 
@@ -34,8 +39,17 @@ function textChunk(text: string) {
   return { candidates: [{ content: { parts: [{ text }] } }] }
 }
 
+function fallbackSuggestionsResponse(items?: string[]) {
+  const parts = items ? [{ functionCall: { name: 'suggest_options', args: { items } } }] : []
+  return { response: { candidates: [{ content: { parts } }] } }
+}
+
 describe('GeminiProvider', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Default: the forced fallback suggestions call returns nothing
+    mockGenerateContent.mockResolvedValue(fallbackSuggestionsResponse())
+  })
 
   it('includes current JST datetime in system instruction', async () => {
     vi.useFakeTimers()
@@ -191,6 +205,64 @@ describe('GeminiProvider', () => {
       'Here are your options.',
       { type: 'suggestions', items: ['Yes', 'No', 'Maybe'] },
     ])
+    // No fallback needed when the model called suggest_options itself
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('forces a fallback suggest_options call when the model skipped it', async () => {
+    async function* fakeStream() {
+      yield textChunk('Here is ')
+      yield textChunk('my answer.')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    mockGenerateContent.mockResolvedValue(
+      fallbackSuggestionsResponse(['Tell me more', 'Another topic'])
+    )
+
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(
+      provider.chatStream([{ role: 'user', content: 'earlier' }], 'Hi', noopExecutor)
+    )
+
+    expect(items).toEqual([
+      'Here is ',
+      'my answer.',
+      { type: 'suggestions', items: ['Tell me more', 'Another topic'] },
+    ])
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    const arg = mockGenerateContent.mock.calls[0][0] as {
+      contents: Array<{ role: string; parts: Array<{ text?: string }> }>
+      toolConfig: { functionCallingConfig: { mode: string; allowedFunctionNames: string[] } }
+    }
+    expect(arg.toolConfig.functionCallingConfig).toEqual({
+      mode: 'ANY',
+      allowedFunctionNames: ['suggest_options'],
+    })
+    // The fallback request replays the conversation including the full answer
+    const modelTurn = arg.contents.find((c) => c.role === 'model')
+    expect(modelTurn!.parts[0].text).toBe('Here is my answer.')
+  })
+
+  it('yields no suggestions when the fallback returns none', async () => {
+    async function* fakeStream() {
+      yield textChunk('answer')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toEqual(['answer'])
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not break the reply when the fallback call fails', async () => {
+    async function* fakeStream() {
+      yield textChunk('answer')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    mockGenerateContent.mockRejectedValue(new Error('quota exceeded'))
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toEqual(['answer'])
   })
 
   it('includes googleSearch tool when googleSearch option is true', async () => {
