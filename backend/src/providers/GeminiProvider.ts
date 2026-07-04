@@ -6,8 +6,11 @@ import type {
   Tool,
   ToolConfig,
 } from '@google/generative-ai'
+import { startObservation } from '@langfuse/tracing'
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
 import { GEMINI_CHAT_MODEL } from '../config/gemini'
+import { toUsageDetails } from '../config/langfuse'
+import type { GeminiUsageMetadata } from '../config/langfuse'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
 import { chatFunctionDeclarations } from '../tools/registry'
 
@@ -31,6 +34,10 @@ function parseSuggestOptionsItems(args: unknown): string[] | undefined {
   return Array.isArray(items) && items.length > 0 ? items : undefined
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 // The SDK's ToolConfig doesn't model this field; it is required when mixing
 // built-in tools (googleSearch) with function calling.
 const SERVER_SIDE_TOOL_CONFIG = { includeServerSideToolInvocations: true } as unknown as ToolConfig
@@ -38,6 +45,7 @@ const SERVER_SIDE_TOOL_CONFIG = { includeServerSideToolInvocations: true } as un
 interface StreamState {
   suggestions?: string[]
   hasText: boolean
+  usageMetadata?: GeminiUsageMetadata
 }
 
 // Thinking models stream thought-summary parts: regular text parts flagged
@@ -89,6 +97,8 @@ export class GeminiProvider implements AIProvider {
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
       assertChunkNotBlocked(chunk)
+      // Streaming responses carry usageMetadata on the final chunk.
+      if (chunk.usageMetadata) state.usageMetadata = chunk.usageMetadata
       if (hooks.rawParts) {
         for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
           hooks.rawParts.push(part)
@@ -139,7 +149,6 @@ export class GeminiProvider implements AIProvider {
       // Required when mixing built-in tools (googleSearch) with function calling
       ...(this.googleSearch && { toolConfig: SERVER_SIDE_TOOL_CONFIG }),
     })
-    const result = await chat.sendMessageStream(newMessage)
 
     const state: StreamState = { hasText: false }
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
@@ -149,23 +158,52 @@ export class GeminiProvider implements AIProvider {
     // preserve the raw parts ourselves for use in the follow-up call.
     const rawModelParts: Part[] = []
 
-    yield* this.emitTextFromStream(result.stream, state, {
-      rawParts: rawModelParts,
-      onFunctionCall: async (name, args) => {
-        executedToolCall = true
-        const response = await executeFn(name, args)
-        pendingFunctionResponses.push({ name, response })
+    const generation = startObservation(
+      'gemini-chat',
+      {
+        model: GEMINI_CHAT_MODEL,
+        input: [...toGeminiHistory(history), { role: 'user', parts: [{ text: newMessage }] }],
       },
-      // The model turn is replayed verbatim in the follow-up call, and the API
-      // requires a functionResponse for every functionCall in it — including
-      // suggest_options, even though it is handled client-side.
-      onSuggestOptionsCall: () => {
-        pendingFunctionResponses.push({
-          name: 'suggest_options',
-          response: { result: 'displayed' },
-        })
-      },
-    })
+      { asType: 'generation' }
+    )
+    let primaryText = ''
+    try {
+      const result = await chat.sendMessageStream(newMessage)
+      for await (const text of this.emitTextFromStream(result.stream, state, {
+        rawParts: rawModelParts,
+        onFunctionCall: async (name, args) => {
+          executedToolCall = true
+          const toolSpan = startObservation(`tool:${name}`, { input: args }, { asType: 'tool' })
+          let response: unknown
+          try {
+            response = await executeFn(name, args)
+          } catch (err) {
+            toolSpan.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
+            throw err
+          }
+          toolSpan.update({ output: response }).end()
+          pendingFunctionResponses.push({ name, response })
+        },
+        // The model turn is replayed verbatim in the follow-up call, and the API
+        // requires a functionResponse for every functionCall in it — including
+        // suggest_options, even though it is handled client-side.
+        onSuggestOptionsCall: () => {
+          pendingFunctionResponses.push({
+            name: 'suggest_options',
+            response: { result: 'displayed' },
+          })
+        },
+      })) {
+        primaryText += text
+        yield text
+      }
+    } catch (err) {
+      generation.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
+      throw err
+    }
+    generation
+      .update({ output: JSON.stringify(primaryText), usageDetails: toUsageDetails(state.usageMetadata) })
+      .end()
 
     // If Gemini only called functions and generated no text, send function results
     // back so Gemini produces its text response. Use model.generateContentStream
@@ -186,12 +224,32 @@ export class GeminiProvider implements AIProvider {
           })),
         },
       ]
-      const followUp = await model.generateContentStream({
-        contents: manualHistory,
-        tools,
-        toolConfig: SERVER_SIDE_TOOL_CONFIG,
-      })
-      yield* this.emitTextFromStream(followUp.stream, state)
+      // Usage on the state is per-pass; reset so the follow-up generation
+      // reports its own numbers rather than the primary pass's.
+      state.usageMetadata = undefined
+      const followUpGeneration = startObservation(
+        'gemini-chat-followup',
+        { model: GEMINI_CHAT_MODEL, input: manualHistory },
+        { asType: 'generation' }
+      )
+      let followUpText = ''
+      try {
+        const followUp = await model.generateContentStream({
+          contents: manualHistory,
+          tools,
+          toolConfig: SERVER_SIDE_TOOL_CONFIG,
+        })
+        for await (const text of this.emitTextFromStream(followUp.stream, state)) {
+          followUpText += text
+          yield text
+        }
+      } catch (err) {
+        followUpGeneration.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
+        throw err
+      }
+      followUpGeneration
+        .update({ output: JSON.stringify(followUpText), usageDetails: toUsageDetails(state.usageMetadata) })
+        .end()
     }
 
     if (state.suggestions) {
