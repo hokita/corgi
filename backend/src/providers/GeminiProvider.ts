@@ -202,7 +202,10 @@ export class GeminiProvider implements AIProvider {
       throw err
     }
     generation
-      .update({ output: JSON.stringify(primaryText), usageDetails: toUsageDetails(state.usageMetadata) })
+      .update({
+        output: JSON.stringify(primaryText),
+        usageDetails: toUsageDetails(state.usageMetadata),
+      })
       .end()
 
     // If Gemini only called functions and generated no text, send function results
@@ -248,7 +251,10 @@ export class GeminiProvider implements AIProvider {
         throw err
       }
       followUpGeneration
-        .update({ output: JSON.stringify(followUpText), usageDetails: toUsageDetails(state.usageMetadata) })
+        .update({
+          output: JSON.stringify(followUpText),
+          usageDetails: toUsageDetails(state.usageMetadata),
+        })
         .end()
     }
 

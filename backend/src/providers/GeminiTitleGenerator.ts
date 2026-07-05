@@ -37,7 +37,10 @@ export class GeminiTitleGenerator implements TitleGenerator {
       }
       const title = result.response.text().trim().slice(0, 50) || message.slice(0, 40)
       generation
-        .update({ output: JSON.stringify(title), usageDetails: toUsageDetails(result.response.usageMetadata) })
+        .update({
+          output: JSON.stringify(title),
+          usageDetails: toUsageDetails(result.response.usageMetadata),
+        })
         .end()
       trace.update({ output: JSON.stringify(title) }).end()
       return title
@@ -45,7 +48,11 @@ export class GeminiTitleGenerator implements TitleGenerator {
       console.error('[GeminiTitleGenerator] failed to generate title:', err)
       const fallback = message.slice(0, 40)
       trace
-        .update({ output: JSON.stringify(fallback), level: 'ERROR', statusMessage: errorMessage(err) })
+        .update({
+          output: JSON.stringify(fallback),
+          level: 'ERROR',
+          statusMessage: errorMessage(err),
+        })
         .end()
       return fallback
     }

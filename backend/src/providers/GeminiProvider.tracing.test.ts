@@ -145,9 +145,11 @@ describe('GeminiProvider tracing: tool calls and follow-up', () => {
     expect(JSON.parse(String(followUp!.attributes['langfuse.observation.output']))).toBe(
       'Briefing text'
     )
-    expect(JSON.parse(String(followUp!.attributes['langfuse.observation.usage_details']))).toEqual(
-      { input: 50, output: 30, total: 80 }
-    )
+    expect(JSON.parse(String(followUp!.attributes['langfuse.observation.usage_details']))).toEqual({
+      input: 50,
+      output: 30,
+      total: 80,
+    })
   })
 
   it('nests provider spans under an active parent observation', async () => {

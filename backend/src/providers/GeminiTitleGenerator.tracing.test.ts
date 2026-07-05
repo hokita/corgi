@@ -77,8 +77,6 @@ describe('GeminiTitleGenerator tracing', () => {
     const root = finishedSpan('generate-title')
     expect(root).toBeDefined()
     expect(root!.attributes['langfuse.observation.level']).toBe('ERROR')
-    expect(JSON.parse(String(root!.attributes['langfuse.observation.output']))).toBe(
-      'A'.repeat(40)
-    )
+    expect(JSON.parse(String(root!.attributes['langfuse.observation.output']))).toBe('A'.repeat(40))
   })
 })

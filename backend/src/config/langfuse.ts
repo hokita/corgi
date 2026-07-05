@@ -33,9 +33,7 @@ export interface GeminiUsageMetadata {
   totalTokenCount?: number
 }
 
-export function toUsageDetails(
-  usage?: GeminiUsageMetadata
-): Record<string, number> | undefined {
+export function toUsageDetails(usage?: GeminiUsageMetadata): Record<string, number> | undefined {
   if (!usage) return undefined
   const details: Record<string, number> = {}
   if (usage.promptTokenCount !== undefined) details.input = usage.promptTokenCount
