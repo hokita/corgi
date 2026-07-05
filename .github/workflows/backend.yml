@@ -63,5 +63,5 @@ jobs:
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances 2 \
-            --set-env-vars "FIREBASE_PROJECT_ID=corgi-8732c,FRONTEND_URL=https://corgi-8732c.web.app,GOOGLE_SEARCH_ENABLED=true,LANGFUSE_BASE_URL=https://cloud.langfuse.com,LANGFUSE_TRACING_ENVIRONMENT=production" \
+            --set-env-vars "FIREBASE_PROJECT_ID=corgi-8732c,FRONTEND_URL=https://corgi-8732c.web.app,GOOGLE_SEARCH_ENABLED=true,LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com,LANGFUSE_TRACING_ENVIRONMENT=production" \
             --set-secrets "ALLOWED_EMAIL=ALLOWED_EMAIL:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,LANGFUSE_PUBLIC_KEY=LANGFUSE_PUBLIC_KEY:latest,LANGFUSE_SECRET_KEY=LANGFUSE_SECRET_KEY:latest"
