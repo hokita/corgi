@@ -2,11 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { startObservation } from '@langfuse/tracing'
 import type { TitleGenerator } from './AIProvider'
 import { GEMINI_TITLE_MODEL } from '../config/gemini'
-import { toUsageDetails } from '../config/langfuse'
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
+import { toUsageDetails, errorMessage, toTraceValue } from '../config/langfuse'
 
 export class GeminiTitleGenerator implements TitleGenerator {
   private client: GoogleGenerativeAI
@@ -16,7 +12,7 @@ export class GeminiTitleGenerator implements TitleGenerator {
   }
 
   async generateTitle(message: string): Promise<string> {
-    const trace = startObservation('generate-title', { input: JSON.stringify(message) })
+    const trace = startObservation('generate-title', { input: toTraceValue(message) })
     try {
       const model = this.client.getGenerativeModel({ model: GEMINI_TITLE_MODEL })
       const prompt =
@@ -25,7 +21,7 @@ export class GeminiTitleGenerator implements TitleGenerator {
         `Return only the title, nothing else.`
       const generation = trace.startObservation(
         'gemini-title',
-        { model: GEMINI_TITLE_MODEL, input: JSON.stringify(prompt) },
+        { model: GEMINI_TITLE_MODEL, input: toTraceValue(prompt) },
         { asType: 'generation' }
       )
       let result
@@ -38,7 +34,7 @@ export class GeminiTitleGenerator implements TitleGenerator {
       const title = result.response.text().trim().slice(0, 50) || message.slice(0, 40)
       generation
         .update({
-          output: JSON.stringify(title),
+          output: toTraceValue(title),
           usageDetails: toUsageDetails(result.response.usageMetadata),
         })
         .end()
@@ -49,7 +45,7 @@ export class GeminiTitleGenerator implements TitleGenerator {
       const fallback = message.slice(0, 40)
       trace
         .update({
-          output: JSON.stringify(fallback),
+          output: toTraceValue(fallback),
           level: 'ERROR',
           statusMessage: errorMessage(err),
         })

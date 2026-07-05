@@ -13,7 +13,7 @@ import * as db from '../services/firestore'
 import { createFunctionExecutor } from '../tools/registry'
 import { requireUid } from '../middleware/auth'
 import { startActiveObservation, propagateAttributes } from '@langfuse/tracing'
-import { flushLangfuse } from '../config/langfuse'
+import { flushLangfuse, errorMessage, toTraceValue } from '../config/langfuse'
 
 function writeSSE(res: Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
@@ -51,8 +51,8 @@ async function streamAndPersist(opts: {
   // Langfuse UI lists; the span's own input/output mirror them.
   await startActiveObservation('chat', async (span) => {
     await propagateAttributes({ metadata: { conversationId } }, async () => {
-      span.setTraceIO({ input: JSON.stringify(message) })
-      span.update({ input: JSON.stringify(message) })
+      span.setTraceIO({ input: toTraceValue(message) })
+      span.update({ input: toTraceValue(message) })
       try {
         let fullText = ''
         let suggestions: string[] | undefined
@@ -67,13 +67,13 @@ async function streamAndPersist(opts: {
         }
         await db.addMessage(conversationId, 'assistant', fullText, suggestions)
         await db.updateConversationLastMessage(conversationId, fullText)
-        span.setTraceIO({ output: JSON.stringify(fullText) })
-        span.update({ output: JSON.stringify(fullText) })
+        span.setTraceIO({ output: toTraceValue(fullText) })
+        span.update({ output: toTraceValue(fullText) })
         writeSSE(res, { type: 'done' })
       } catch (err) {
         span.update({
           level: 'ERROR',
-          statusMessage: err instanceof Error ? err.message : String(err),
+          statusMessage: errorMessage(err),
         })
         throw err
       }

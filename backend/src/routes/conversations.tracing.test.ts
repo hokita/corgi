@@ -39,9 +39,13 @@ vi.mock('../services/hnCache', () => ({
 }))
 
 const mockFlush = vi.fn().mockResolvedValue(undefined)
-vi.mock('../config/langfuse', () => ({
-  flushLangfuse: () => mockFlush(),
-}))
+vi.mock('../config/langfuse', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...(actual as object),
+    flushLangfuse: () => mockFlush(),
+  }
+})
 
 import { createConversationsRouter } from './conversations'
 

@@ -9,7 +9,7 @@ import type {
 import { startObservation } from '@langfuse/tracing'
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
 import { GEMINI_CHAT_MODEL } from '../config/gemini'
-import { toUsageDetails } from '../config/langfuse'
+import { toUsageDetails, errorMessage, toTraceValue } from '../config/langfuse'
 import type { GeminiUsageMetadata } from '../config/langfuse'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
 import { chatFunctionDeclarations } from '../tools/registry'
@@ -32,10 +32,6 @@ function toGeminiHistory(history: Message[]): Content[] {
 function parseSuggestOptionsItems(args: unknown): string[] | undefined {
   const items = (args as { items?: string[] } | undefined)?.items
   return Array.isArray(items) && items.length > 0 ? items : undefined
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }
 
 // The SDK's ToolConfig doesn't model this field; it is required when mixing
@@ -162,7 +158,10 @@ export class GeminiProvider implements AIProvider {
       'gemini-chat',
       {
         model: GEMINI_CHAT_MODEL,
-        input: [...toGeminiHistory(history), { role: 'user', parts: [{ text: newMessage }] }],
+        input: toTraceValue([
+          ...toGeminiHistory(history),
+          { role: 'user', parts: [{ text: newMessage }] },
+        ]),
       },
       { asType: 'generation' }
     )
@@ -173,7 +172,11 @@ export class GeminiProvider implements AIProvider {
         rawParts: rawModelParts,
         onFunctionCall: async (name, args) => {
           executedToolCall = true
-          const toolSpan = startObservation(`tool:${name}`, { input: args }, { asType: 'tool' })
+          const toolSpan = startObservation(
+            `tool:${name}`,
+            { input: toTraceValue(args) },
+            { asType: 'tool' }
+          )
           let response: unknown
           try {
             response = await executeFn(name, args)
@@ -181,7 +184,7 @@ export class GeminiProvider implements AIProvider {
             toolSpan.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
             throw err
           }
-          toolSpan.update({ output: response }).end()
+          toolSpan.update({ output: toTraceValue(response) }).end()
           pendingFunctionResponses.push({ name, response })
         },
         // The model turn is replayed verbatim in the follow-up call, and the API
@@ -203,7 +206,7 @@ export class GeminiProvider implements AIProvider {
     }
     generation
       .update({
-        output: JSON.stringify(primaryText),
+        output: toTraceValue(primaryText),
         usageDetails: toUsageDetails(state.usageMetadata),
       })
       .end()
@@ -232,7 +235,7 @@ export class GeminiProvider implements AIProvider {
       state.usageMetadata = undefined
       const followUpGeneration = startObservation(
         'gemini-chat-followup',
-        { model: GEMINI_CHAT_MODEL, input: manualHistory },
+        { model: GEMINI_CHAT_MODEL, input: toTraceValue(manualHistory) },
         { asType: 'generation' }
       )
       let followUpText = ''
@@ -252,7 +255,7 @@ export class GeminiProvider implements AIProvider {
       }
       followUpGeneration
         .update({
-          output: JSON.stringify(followUpText),
+          output: toTraceValue(followUpText),
           usageDetails: toUsageDetails(state.usageMetadata),
         })
         .end()
