@@ -14,12 +14,16 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@langfuse/otel": "^5.9.1",
+    "@langfuse/tracing": "^5.9.1",
+    "@opentelemetry/sdk-trace-node": "^2.9.0",
     "cors": "^2.8.5",
     "express": "^4.18.0",
     "firebase-admin": "^12.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@opentelemetry/api": "^1.9.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^24.0.0",

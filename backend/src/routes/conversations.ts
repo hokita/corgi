@@ -12,6 +12,8 @@ import type {
 import * as db from '../services/firestore'
 import { createFunctionExecutor } from '../tools/registry'
 import { requireUid } from '../middleware/auth'
+import { startActiveObservation, propagateAttributes } from '@langfuse/tracing'
+import { flushLangfuse, errorMessage, toTraceValue } from '../config/langfuse'
 
 function writeSSE(res: Response, event: SSEEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
@@ -44,20 +46,39 @@ async function streamAndPersist(opts: {
 
   const executeFn = makeExecutor(uid, conversationId, res)
 
-  let fullText = ''
-  let suggestions: string[] | undefined
-  for await (const item of ai.chatStream(history, message, executeFn)) {
-    if (typeof item === 'string') {
-      fullText += item
-      writeSSE(res, { type: 'chunk', text: item })
-    } else if (item.type === 'suggestions') {
-      suggestions = item.items
-      writeSSE(res, { type: 'suggestions', items: item.items })
-    }
-  }
-  await db.addMessage(conversationId, 'assistant', fullText, suggestions)
-  await db.updateConversationLastMessage(conversationId, fullText)
-  writeSSE(res, { type: 'done' })
+  // Root observation for the request: provider generations and tool spans
+  // nest under it via OTel context. Trace-level input/output are what the
+  // Langfuse UI lists; the span's own input/output mirror them.
+  await startActiveObservation('chat', async (span) => {
+    await propagateAttributes({ metadata: { conversationId } }, async () => {
+      span.setTraceIO({ input: toTraceValue(message) })
+      span.update({ input: toTraceValue(message) })
+      try {
+        let fullText = ''
+        let suggestions: string[] | undefined
+        for await (const item of ai.chatStream(history, message, executeFn)) {
+          if (typeof item === 'string') {
+            fullText += item
+            writeSSE(res, { type: 'chunk', text: item })
+          } else if (item.type === 'suggestions') {
+            suggestions = item.items
+            writeSSE(res, { type: 'suggestions', items: item.items })
+          }
+        }
+        await db.addMessage(conversationId, 'assistant', fullText, suggestions)
+        await db.updateConversationLastMessage(conversationId, fullText)
+        span.setTraceIO({ output: toTraceValue(fullText) })
+        span.update({ output: toTraceValue(fullText) })
+        writeSSE(res, { type: 'done' })
+      } catch (err) {
+        span.update({
+          level: 'ERROR',
+          statusMessage: errorMessage(err),
+        })
+        throw err
+      }
+    })
+  })
 }
 
 async function withSSEErrorHandling(res: Response, work: () => Promise<void>): Promise<void> {
@@ -71,6 +92,11 @@ async function withSSEErrorHandling(res: Response, work: () => Promise<void>): P
       writeSSE(res, { type: 'error', message: 'Internal server error' })
     }
   } finally {
+    try {
+      await flushLangfuse()
+    } catch (err) {
+      console.error('[langfuse] flush failed:', err)
+    }
     if (!res.writableEnded) res.end()
   }
 }

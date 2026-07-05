@@ -62,3 +62,7 @@ Frontend deploys to Firebase Hosting via `firebase deploy`.
 | `GEMINI_API_KEY` | Gemini API key from Google AI Studio |
 | `FIREBASE_PROJECT_ID` | Firebase project ID |
 | `FRONTEND_URL` | Frontend origin for CORS |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key (optional — tracing is disabled without it) |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key (optional — tracing is disabled without it) |
+| `LANGFUSE_BASE_URL` | Langfuse host, e.g. `https://cloud.langfuse.com` |
+| `LANGFUSE_TRACING_ENVIRONMENT` | Trace environment tag: `development` locally, `production` on Cloud Run |
