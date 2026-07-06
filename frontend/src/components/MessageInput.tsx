@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowUp } from '@fortawesome/free-solid-svg-icons'
 
 interface Props {
   onSend: (message: string) => void
@@ -51,8 +53,9 @@ export default function MessageInput({ onSend, disabled }: Props) {
         onClick={handleSend}
         disabled={disabled || !text.trim()}
         className="w-10 h-10 rounded-full bg-[#0084ff] border-none text-white text-lg cursor-pointer shrink-0 self-end disabled:opacity-40 disabled:cursor-not-allowed"
+        aria-label="Send message"
       >
-        ↑
+        <FontAwesomeIcon icon={faArrowUp} />
       </button>
     </div>
   )

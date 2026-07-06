@@ -99,7 +99,7 @@ describe('ChatPage error toasts', () => {
     })
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
-    fireEvent.click(screen.getByText('↑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(screen.getByText('Title generation failed')).toBeInTheDocument())
   })
 
@@ -107,7 +107,7 @@ describe('ChatPage error toasts', () => {
     mockApi.createConversation.mockRejectedValue(new Error('Network error'))
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
-    fireEvent.click(screen.getByText('↑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(screen.getByText('Failed to send message')).toBeInTheDocument())
   })
 })
