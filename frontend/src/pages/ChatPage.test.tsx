@@ -111,3 +111,33 @@ describe('ChatPage error toasts', () => {
     await waitFor(() => expect(screen.getByText('Failed to send message')).toBeInTheDocument())
   })
 })
+
+describe('ChatPage compose button', () => {
+  it('renders the compose button in the header', async () => {
+    render(<ChatPage user={fakeUser} />)
+    await waitFor(() => expect(screen.getByText('✏️')).toBeInTheDocument())
+  })
+
+  it('clicking compose resets to the empty state', async () => {
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockResolvedValue([
+      { id: 'm1', role: 'user', content: 'hello' },
+    ])
+
+    render(<ChatPage user={fakeUser} />)
+
+    // Open drawer and load a conversation
+    fireEvent.click(screen.getByText('☰'))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('hello'))
+
+    // Click compose — should reset to empty state
+    fireEvent.click(screen.getByText('✏️'))
+    await waitFor(() =>
+      expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+    )
+  })
+})

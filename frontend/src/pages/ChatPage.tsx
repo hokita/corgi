@@ -87,7 +87,16 @@ export default function ChatPage({ user }: Props) {
         >
           corgi
         </button>
-        <UserMenu user={user} />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleNewChat}
+            disabled={sending}
+            className="bg-transparent border-none text-xl cursor-pointer p-1 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ✏️
+          </button>
+          <UserMenu user={user} />
+        </div>
       </div>
 
       {messages.length === 0 && !sending ? (
