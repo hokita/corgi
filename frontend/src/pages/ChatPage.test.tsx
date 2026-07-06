@@ -72,7 +72,7 @@ describe('ChatPage error toasts', () => {
     ])
     mockApi.getMessages.mockRejectedValue(new Error('Network error'))
     render(<ChatPage user={fakeUser} />)
-    fireEvent.click(screen.getByText('☰'))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => expect(screen.getByText('Failed to load messages')).toBeInTheDocument())
@@ -84,9 +84,9 @@ describe('ChatPage error toasts', () => {
     ])
     mockApi.deleteConversation.mockRejectedValue(new Error('Network error'))
     render(<ChatPage user={fakeUser} />)
-    fireEvent.click(screen.getByText('☰'))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
-    fireEvent.click(screen.getByText('🗑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete conversation' }))
     await waitFor(() =>
       expect(screen.getByText('Failed to delete conversation')).toBeInTheDocument()
     )
@@ -99,7 +99,7 @@ describe('ChatPage error toasts', () => {
     })
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
-    fireEvent.click(screen.getByText('↑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(screen.getByText('Title generation failed')).toBeInTheDocument())
   })
 
@@ -107,7 +107,7 @@ describe('ChatPage error toasts', () => {
     mockApi.createConversation.mockRejectedValue(new Error('Network error'))
     render(<ChatPage user={fakeUser} />)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
-    fireEvent.click(screen.getByText('↑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(screen.getByText('Failed to send message')).toBeInTheDocument())
   })
 })
@@ -115,7 +115,7 @@ describe('ChatPage error toasts', () => {
 describe('ChatPage compose button', () => {
   it('renders the compose button in the header', async () => {
     render(<ChatPage user={fakeUser} />)
-    await waitFor(() => expect(screen.getByText('✏️')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New chat' })).toBeInTheDocument())
   })
 
   it('clicking compose resets to the empty state', async () => {
@@ -129,13 +129,13 @@ describe('ChatPage compose button', () => {
     render(<ChatPage user={fakeUser} />)
 
     // Open drawer and load a conversation
-    fireEvent.click(screen.getByText('☰'))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => screen.getByText('hello'))
 
     // Click compose — should reset to empty state
-    fireEvent.click(screen.getByText('✏️'))
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
     await waitFor(() =>
       expect(screen.getByText('Start a conversation')).toBeInTheDocument()
     )
