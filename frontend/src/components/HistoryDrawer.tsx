@@ -1,4 +1,6 @@
 import type { Conversation } from '../types'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faXmark, faTrashCan } from '@fortawesome/free-solid-svg-icons'
 
 interface Props {
   conversations: Conversation[]
@@ -34,9 +36,10 @@ export default function HistoryDrawer({
           <span className="font-bold">Conversations</span>
           <button
             onClick={onClose}
+            aria-label="Close menu"
             className="bg-transparent border-none text-xl cursor-pointer leading-none"
           >
-            ✕
+            <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
@@ -61,9 +64,10 @@ export default function HistoryDrawer({
                   e.stopPropagation()
                   onDelete(c.id)
                 }}
+                aria-label="Delete conversation"
                 className="bg-transparent border-none text-gray-300 text-base cursor-pointer p-1 ml-2 shrink-0 hover:text-red-400"
               >
-                🗑
+                <FontAwesomeIcon icon={faTrashCan} />
               </button>
             </div>
           ))}

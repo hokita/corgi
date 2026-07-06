@@ -86,7 +86,7 @@ describe('ChatPage error toasts', () => {
     render(<ChatPage user={fakeUser} />)
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
-    fireEvent.click(screen.getByText('🗑'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete conversation' }))
     await waitFor(() =>
       expect(screen.getByText('Failed to delete conversation')).toBeInTheDocument()
     )
