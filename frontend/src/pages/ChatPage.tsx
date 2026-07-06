@@ -9,6 +9,8 @@ import UserMenu from '../components/UserMenu'
 import MorningBriefingButton from '../components/MorningBriefingButton'
 import { useToast } from '../hooks/useToast'
 import { useChatStream } from '../hooks/useChatStream'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faBars, faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 interface Props {
   user: User
@@ -78,8 +80,9 @@ export default function ChatPage({ user }: Props) {
         <button
           onClick={() => setDrawerOpen(true)}
           className="bg-transparent border-none text-xl cursor-pointer p-1 leading-none"
+          aria-label="Toggle menu"
         >
-          ☰
+          <FontAwesomeIcon icon={faBars} />
         </button>
         <button
           onClick={() => window.location.reload()}
@@ -92,8 +95,9 @@ export default function ChatPage({ user }: Props) {
             onClick={handleNewChat}
             disabled={sending}
             className="bg-transparent border-none text-xl cursor-pointer p-1 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="New chat"
           >
-            ✏️
+            <FontAwesomeIcon icon={faPenToSquare} />
           </button>
           <UserMenu user={user} />
         </div>
