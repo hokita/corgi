@@ -68,7 +68,7 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(mockGetGenerativeModel).toHaveBeenCalledWith(
       expect.objectContaining({
-        generationConfig: expect.objectContaining({ maxOutputTokens: 8192 }),
+        generationConfig: expect.objectContaining({ maxOutputTokens: 15000 }),
       })
     )
   })

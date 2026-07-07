@@ -152,7 +152,7 @@ export class GeminiProvider implements AIProvider {
       // gemini-3.5-flash is a thinking model: thought tokens count against
       // maxOutputTokens, so long tool-driven replies (e.g. the HN briefing)
       // need far more headroom than the visible text alone would suggest.
-      generationConfig: { maxOutputTokens: 8192 },
+      generationConfig: { maxOutputTokens: 15000 },
     })
     const tools: Tool[] = [{ functionDeclarations: chatFunctionDeclarations }]
     // The SDK's Tool union doesn't include googleSearch
