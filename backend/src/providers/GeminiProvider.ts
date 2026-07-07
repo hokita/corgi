@@ -135,6 +135,7 @@ export class GeminiProvider implements AIProvider {
       model: GEMINI_CHAT_MODEL,
       systemInstruction:
         `The current date and time is ${currentJstDatetime()}. ` + CHAT_SYSTEM_PROMPT,
+      generationConfig: { maxOutputTokens: 2048 },
     })
     const tools: Tool[] = [{ functionDeclarations: chatFunctionDeclarations }]
     // The SDK's Tool union doesn't include googleSearch

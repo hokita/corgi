@@ -59,6 +59,36 @@ describe('GeminiProvider', () => {
     vi.useRealTimers()
   })
 
+  it('passes maxOutputTokens in generationConfig', async () => {
+    async function* fakeStream() {
+      yield textChunk('reply')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(mockGetGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationConfig: expect.objectContaining({ maxOutputTokens: 2048 }),
+      })
+    )
+  })
+
+  it('instructs model not to list suggest_options in reply text', async () => {
+    async function* fakeStream() {
+      yield textChunk('reply')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(mockGetGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemInstruction: expect.stringContaining(
+          'Never list the follow-up options in your reply text'
+        ),
+      })
+    )
+  })
+
   it('yields text chunks from Gemini stream', async () => {
     async function* fakeStream() {
       yield textChunk('Hello')
