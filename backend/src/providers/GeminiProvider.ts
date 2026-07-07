@@ -59,6 +59,11 @@ function visibleText(chunk: EnhancedGenerateContentResponse): string {
 // truncated message gets persisted as if it succeeded.
 const BAD_FINISH_REASONS = ['SAFETY', 'RECITATION', 'LANGUAGE']
 
+// Not an error: the partial text already streamed to the client is still
+// useful, and throwing here would discard it for a generic error message.
+// The notice keeps the truncation visible instead of silent.
+export const TRUNCATION_NOTICE = '\n\n*⚠️ Response truncated — output token limit reached.*'
+
 function assertChunkNotBlocked(chunk: EnhancedGenerateContentResponse): void {
   const finishReason = chunk.candidates?.[0]?.finishReason
   if (finishReason && BAD_FINISH_REASONS.includes(finishReason)) {
@@ -91,8 +96,10 @@ export class GeminiProvider implements AIProvider {
       onSuggestOptionsCall?: () => void
     } = {}
   ): AsyncIterable<string> {
+    let truncated = false
     for await (const chunk of stream) {
       assertChunkNotBlocked(chunk)
+      if (chunk.candidates?.[0]?.finishReason === 'MAX_TOKENS') truncated = true
       // Streaming responses carry usageMetadata on the final chunk.
       if (chunk.usageMetadata) state.usageMetadata = chunk.usageMetadata
       if (hooks.rawParts) {
@@ -124,6 +131,13 @@ export class GeminiProvider implements AIProvider {
         }
       }
     }
+    if (truncated) {
+      console.warn('[gemini] response hit maxOutputTokens and was truncated')
+      // Only append to a pass that produced visible text; a truncated
+      // function-call-only pass must not set hasText or the follow-up
+      // call that writes the actual reply would be skipped.
+      if (state.hasText) yield TRUNCATION_NOTICE
+    }
   }
 
   async *chatStream(
@@ -135,7 +149,10 @@ export class GeminiProvider implements AIProvider {
       model: GEMINI_CHAT_MODEL,
       systemInstruction:
         `The current date and time is ${currentJstDatetime()}. ` + CHAT_SYSTEM_PROMPT,
-      generationConfig: { maxOutputTokens: 2048 },
+      // gemini-3.5-flash is a thinking model: thought tokens count against
+      // maxOutputTokens, so long tool-driven replies (e.g. the HN briefing)
+      // need far more headroom than the visible text alone would suggest.
+      generationConfig: { maxOutputTokens: 15000 },
     })
     const tools: Tool[] = [{ functionDeclarations: chatFunctionDeclarations }]
     // The SDK's Tool union doesn't include googleSearch
