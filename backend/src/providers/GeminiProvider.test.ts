@@ -20,7 +20,7 @@ vi.mock('@google/generative-ai', () => ({
   },
 }))
 
-import { GeminiProvider } from './GeminiProvider'
+import { GeminiProvider, TRUNCATION_NOTICE } from './GeminiProvider'
 
 const noopExecutor: FunctionExecutor = vi.fn().mockResolvedValue({})
 
@@ -68,7 +68,7 @@ describe('GeminiProvider', () => {
     await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(mockGetGenerativeModel).toHaveBeenCalledWith(
       expect.objectContaining({
-        generationConfig: expect.objectContaining({ maxOutputTokens: 2048 }),
+        generationConfig: expect.objectContaining({ maxOutputTokens: 8192 }),
       })
     )
   })
@@ -192,6 +192,85 @@ describe('GeminiProvider', () => {
     const provider = new GeminiProvider('fake-key')
     const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(items).toEqual(['done'])
+  })
+
+  it('appends a truncation notice when the stream hits MAX_TOKENS', async () => {
+    // Regression: MAX_TOKENS is not a blocked finishReason, so the cut-off
+    // reply used to be persisted silently as if it were complete (the HN
+    // briefing rendering a single story).
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    async function* fakeStream() {
+      yield textChunk('# ☕ Morning Coffee Briefing\n\nFirst story')
+      yield { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', noopExecutor))
+    expect(items).toEqual(['# ☕ Morning Coffee Briefing\n\nFirst story', TRUNCATION_NOTICE])
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('appends a truncation notice when the follow-up stream hits MAX_TOKENS', async () => {
+    async function* firstStream() {
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield {
+        candidates: [
+          { finishReason: 'MAX_TOKENS', content: { parts: [{ text: 'Partial briefing' }] } },
+        ],
+      }
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(items).toEqual(['Partial briefing', TRUNCATION_NOTICE])
+    warnSpy.mockRestore()
+  })
+
+  it('still makes the follow-up call when a function-call-only turn hits MAX_TOKENS', async () => {
+    // The notice must not be yielded on a pass with no visible text: that
+    // would set hasText and skip the follow-up call that writes the reply.
+    async function* firstStream() {
+      yield {
+        candidates: [
+          {
+            finishReason: 'MAX_TOKENS',
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    async function* followUpStream() {
+      yield textChunk('# ☕ Morning Coffee Briefing')
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
+    expect(items).toEqual(['# ☕ Morning Coffee Briefing'])
+    warnSpy.mockRestore()
   })
 
   it('yields suggestions item when Gemini calls suggest_options', async () => {
