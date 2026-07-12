@@ -13,6 +13,7 @@ import { toUsageDetails, errorMessage, toTraceValue } from '../config/langfuse'
 import type { GeminiUsageMetadata } from '../config/langfuse'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
 import { chatFunctionDeclarations } from '../tools/registry'
+import { RepetitionGuard } from './repetitionGuard'
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -64,6 +65,11 @@ const BAD_FINISH_REASONS = ['SAFETY', 'RECITATION', 'LANGUAGE']
 // The notice keeps the truncation visible instead of silent.
 export const TRUNCATION_NOTICE = '\n\n*⚠️ Response truncated — output token limit reached.*'
 
+// Same reasoning as TRUNCATION_NOTICE: the text streamed before the loop set
+// in is a real answer worth keeping, so the loop is cut off with a visible
+// notice rather than the whole reply being discarded as an error.
+export const REPETITION_NOTICE = '\n\n*⚠️ Response stopped — the model was repeating itself.*'
+
 function assertChunkNotBlocked(chunk: EnhancedGenerateContentResponse): void {
   const finishReason = chunk.candidates?.[0]?.finishReason
   if (finishReason && BAD_FINISH_REASONS.includes(finishReason)) {
@@ -94,9 +100,11 @@ export class GeminiProvider implements AIProvider {
       rawParts?: Part[]
       onFunctionCall?: (name: string, args: unknown) => Promise<void>
       onSuggestOptionsCall?: () => void
+      abort?: () => void
     } = {}
   ): AsyncIterable<string> {
     let truncated = false
+    const guard = new RepetitionGuard()
     for await (const chunk of stream) {
       assertChunkNotBlocked(chunk)
       if (chunk.candidates?.[0]?.finishReason === 'MAX_TOKENS') truncated = true
@@ -127,6 +135,18 @@ export class GeminiProvider implements AIProvider {
         const text = visibleText(chunk)
         if (text) {
           state.hasText = true
+          // Check before yielding so the chunk that confirms the loop is
+          // dropped instead of streamed. Returning alone is not enough to
+          // stop paying for the loop: the SDK pumps the HTTP response to the
+          // end even when nothing reads the stream, so Gemini would keep
+          // generating (and billing) up to maxOutputTokens. The abort hook
+          // cancels the request itself, which stops generation server-side.
+          if (guard.append(text)) {
+            console.warn('[gemini] repetition loop detected; aborting the request')
+            hooks.abort?.()
+            yield REPETITION_NOTICE
+            return
+          }
           yield text
         }
       }
@@ -165,6 +185,11 @@ export class GeminiProvider implements AIProvider {
     })
 
     const state: StreamState = { hasText: false }
+    // Aborting on repetition-loop detection cancels the underlying request so
+    // Gemini stops generating; a loop always has visible text, so an aborted
+    // primary pass never reaches the follow-up call and one controller can
+    // serve both passes.
+    const abort = new AbortController()
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
     let executedToolCall = false
     // Capture raw parts from the stream. The SDK's ChatSession strips
@@ -185,9 +210,10 @@ export class GeminiProvider implements AIProvider {
     )
     let primaryText = ''
     try {
-      const result = await chat.sendMessageStream(newMessage)
+      const result = await chat.sendMessageStream(newMessage, { signal: abort.signal })
       for await (const text of this.emitTextFromStream(result.stream, state, {
         rawParts: rawModelParts,
+        abort: () => abort.abort(),
         onFunctionCall: async (name, args) => {
           executedToolCall = true
           const toolSpan = startObservation(
@@ -258,12 +284,22 @@ export class GeminiProvider implements AIProvider {
       )
       let followUpText = ''
       try {
-        const followUp = await model.generateContentStream({
-          contents: manualHistory,
-          tools,
-          toolConfig: SERVER_SIDE_TOOL_CONFIG,
-        })
-        for await (const text of this.emitTextFromStream(followUp.stream, state)) {
+        const followUp = await model.generateContentStream(
+          {
+            contents: manualHistory,
+            tools,
+            toolConfig: SERVER_SIDE_TOOL_CONFIG,
+          },
+          { signal: abort.signal }
+        )
+        // Nothing awaits this aggregate promise; on abort it rejects, and an
+        // unobserved rejection would crash the process. Swallowing it broadly
+        // is safe: it is a tee of the stream consumed below, so any non-abort
+        // error also reaches the for-await loop, which reports and rethrows.
+        followUp.response?.catch(() => {})
+        for await (const text of this.emitTextFromStream(followUp.stream, state, {
+          abort: () => abort.abort(),
+        })) {
           followUpText += text
           yield text
         }

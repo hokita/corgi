@@ -20,7 +20,7 @@ vi.mock('@google/generative-ai', () => ({
   },
 }))
 
-import { GeminiProvider, TRUNCATION_NOTICE } from './GeminiProvider'
+import { GeminiProvider, TRUNCATION_NOTICE, REPETITION_NOTICE } from './GeminiProvider'
 
 const noopExecutor: FunctionExecutor = vi.fn().mockResolvedValue({})
 
@@ -270,6 +270,89 @@ describe('GeminiProvider', () => {
 
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
     expect(items).toEqual(['# ☕ Morning Coffee Briefing'])
+    warnSpy.mockRestore()
+  })
+
+  it('stops the stream and appends a notice when the model loops', async () => {
+    // Regression: with maxOutputTokens at 15000, a repetition loop ("Let me
+    // know if you'd like to review your English mistakes...") used to run for
+    // thousands of tokens before the truncation notice kicked in.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const loopSentence =
+      "Let me know if you'd like to review your English mistakes from this conversation. "
+    let chunksConsumed = 0
+    async function* fakeStream() {
+      yield textChunk('Enjoy diving into the threads! ')
+      for (let i = 0; i < 100; i++) {
+        chunksConsumed++
+        yield textChunk(loopSentence)
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+
+    expect(items[0]).toBe('Enjoy diving into the threads! ')
+    expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
+    // The stream must be abandoned shortly after the loop is confirmed, not
+    // drained to the end.
+    expect(chunksConsumed).toBeLessThan(10)
+    // The request itself must be aborted: the SDK pumps the response to the
+    // end even when nothing reads the stream, so without an abort Gemini
+    // keeps generating (and billing) up to maxOutputTokens.
+    const requestOptions = mockSendMessageStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(true)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('does not abort the request on a normal reply', async () => {
+    async function* fakeStream() {
+      yield textChunk('A perfectly ordinary answer.')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    const requestOptions = mockSendMessageStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(false)
+  })
+
+  it('stops the follow-up stream when the model loops after a tool call', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    async function* firstStream() {
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    const loopSentence = 'Let me know where you would like to go next! '
+    async function* followUpStream() {
+      yield textChunk('# ☕ Morning Coffee Briefing\n\nStories here.\n\n')
+      for (let i = 0; i < 100; i++) yield textChunk(loopSentence)
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    // The real SDK result carries an aggregate response promise that rejects
+    // once the request is aborted; the provider must observe that rejection
+    // or the abort crashes the process (vitest fails on unhandled rejections,
+    // so this test doubles as coverage for the rejection handler).
+    mockGenerateContentStream.mockImplementationOnce(async () => ({
+      stream: followUpStream(),
+      response: Promise.reject(new Error('Request aborted when reading from the stream')),
+    }))
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(items[0]).toBe('# ☕ Morning Coffee Briefing\n\nStories here.\n\n')
+    expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
+    const requestOptions = mockGenerateContentStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(true)
     warnSpy.mockRestore()
   })
 
