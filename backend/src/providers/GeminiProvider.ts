@@ -100,6 +100,7 @@ export class GeminiProvider implements AIProvider {
       rawParts?: Part[]
       onFunctionCall?: (name: string, args: unknown) => Promise<void>
       onSuggestOptionsCall?: () => void
+      abort?: () => void
     } = {}
   ): AsyncIterable<string> {
     let truncated = false
@@ -135,10 +136,14 @@ export class GeminiProvider implements AIProvider {
         if (text) {
           state.hasText = true
           // Check before yielding so the chunk that confirms the loop is
-          // dropped instead of streamed. Returning here abandons the rest of
-          // the stream (for await calls the generator's return()).
+          // dropped instead of streamed. Returning alone is not enough to
+          // stop paying for the loop: the SDK pumps the HTTP response to the
+          // end even when nothing reads the stream, so Gemini would keep
+          // generating (and billing) up to maxOutputTokens. The abort hook
+          // cancels the request itself, which stops generation server-side.
           if (guard.append(text)) {
-            console.warn('[gemini] repetition loop detected; stopping the stream')
+            console.warn('[gemini] repetition loop detected; aborting the request')
+            hooks.abort?.()
             yield REPETITION_NOTICE
             return
           }
@@ -180,6 +185,11 @@ export class GeminiProvider implements AIProvider {
     })
 
     const state: StreamState = { hasText: false }
+    // Aborting on repetition-loop detection cancels the underlying request so
+    // Gemini stops generating; a loop always has visible text, so an aborted
+    // primary pass never reaches the follow-up call and one controller can
+    // serve both passes.
+    const abort = new AbortController()
     const pendingFunctionResponses: Array<{ name: string; response: unknown }> = []
     let executedToolCall = false
     // Capture raw parts from the stream. The SDK's ChatSession strips
@@ -200,9 +210,10 @@ export class GeminiProvider implements AIProvider {
     )
     let primaryText = ''
     try {
-      const result = await chat.sendMessageStream(newMessage)
+      const result = await chat.sendMessageStream(newMessage, { signal: abort.signal })
       for await (const text of this.emitTextFromStream(result.stream, state, {
         rawParts: rawModelParts,
+        abort: () => abort.abort(),
         onFunctionCall: async (name, args) => {
           executedToolCall = true
           const toolSpan = startObservation(
@@ -273,12 +284,20 @@ export class GeminiProvider implements AIProvider {
       )
       let followUpText = ''
       try {
-        const followUp = await model.generateContentStream({
-          contents: manualHistory,
-          tools,
-          toolConfig: SERVER_SIDE_TOOL_CONFIG,
-        })
-        for await (const text of this.emitTextFromStream(followUp.stream, state)) {
+        const followUp = await model.generateContentStream(
+          {
+            contents: manualHistory,
+            tools,
+            toolConfig: SERVER_SIDE_TOOL_CONFIG,
+          },
+          { signal: abort.signal }
+        )
+        // Nothing awaits this aggregate promise; on abort it rejects, and an
+        // unobserved rejection would crash the process.
+        followUp.response?.catch(() => {})
+        for await (const text of this.emitTextFromStream(followUp.stream, state, {
+          abort: () => abort.abort(),
+        })) {
           followUpText += text
           yield text
         }

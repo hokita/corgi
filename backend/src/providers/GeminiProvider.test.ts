@@ -297,8 +297,24 @@ describe('GeminiProvider', () => {
     // The stream must be abandoned shortly after the loop is confirmed, not
     // drained to the end.
     expect(chunksConsumed).toBeLessThan(10)
+    // The request itself must be aborted: the SDK pumps the response to the
+    // end even when nothing reads the stream, so without an abort Gemini
+    // keeps generating (and billing) up to maxOutputTokens.
+    const requestOptions = mockSendMessageStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(true)
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
+  })
+
+  it('does not abort the request on a normal reply', async () => {
+    async function* fakeStream() {
+      yield textChunk('A perfectly ordinary answer.')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    const requestOptions = mockSendMessageStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(false)
   })
 
   it('stops the follow-up stream when the model loops after a tool call', async () => {
@@ -328,6 +344,8 @@ describe('GeminiProvider', () => {
 
     expect(items[0]).toBe('# ☕ Morning Coffee Briefing\n\nStories here.\n\n')
     expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
+    const requestOptions = mockGenerateContentStream.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(true)
     warnSpy.mockRestore()
   })
 
