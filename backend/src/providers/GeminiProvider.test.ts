@@ -336,7 +336,14 @@ describe('GeminiProvider', () => {
       for (let i = 0; i < 100; i++) yield textChunk(loopSentence)
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
-    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+    // The real SDK result carries an aggregate response promise that rejects
+    // once the request is aborted; the provider must observe that rejection
+    // or the abort crashes the process (vitest fails on unhandled rejections,
+    // so this test doubles as coverage for the rejection handler).
+    mockGenerateContentStream.mockImplementationOnce(async () => ({
+      stream: followUpStream(),
+      response: Promise.reject(new Error('Request aborted when reading from the stream')),
+    }))
 
     const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
     const provider = new GeminiProvider('fake-key')

@@ -293,7 +293,9 @@ export class GeminiProvider implements AIProvider {
           { signal: abort.signal }
         )
         // Nothing awaits this aggregate promise; on abort it rejects, and an
-        // unobserved rejection would crash the process.
+        // unobserved rejection would crash the process. Swallowing it broadly
+        // is safe: it is a tee of the stream consumed below, so any non-abort
+        // error also reaches the for-await loop, which reports and rethrows.
         followUp.response?.catch(() => {})
         for await (const text of this.emitTextFromStream(followUp.stream, state, {
           abort: () => abort.abort(),
