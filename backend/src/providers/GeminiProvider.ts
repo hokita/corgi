@@ -13,6 +13,7 @@ import { toUsageDetails, errorMessage, toTraceValue } from '../config/langfuse'
 import type { GeminiUsageMetadata } from '../config/langfuse'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
 import { chatFunctionDeclarations } from '../tools/registry'
+import { RepetitionGuard } from './repetitionGuard'
 
 export interface GeminiProviderOptions {
   googleSearch?: boolean
@@ -64,6 +65,11 @@ const BAD_FINISH_REASONS = ['SAFETY', 'RECITATION', 'LANGUAGE']
 // The notice keeps the truncation visible instead of silent.
 export const TRUNCATION_NOTICE = '\n\n*⚠️ Response truncated — output token limit reached.*'
 
+// Same reasoning as TRUNCATION_NOTICE: the text streamed before the loop set
+// in is a real answer worth keeping, so the loop is cut off with a visible
+// notice rather than the whole reply being discarded as an error.
+export const REPETITION_NOTICE = '\n\n*⚠️ Response stopped — the model was repeating itself.*'
+
 function assertChunkNotBlocked(chunk: EnhancedGenerateContentResponse): void {
   const finishReason = chunk.candidates?.[0]?.finishReason
   if (finishReason && BAD_FINISH_REASONS.includes(finishReason)) {
@@ -97,6 +103,7 @@ export class GeminiProvider implements AIProvider {
     } = {}
   ): AsyncIterable<string> {
     let truncated = false
+    const guard = new RepetitionGuard()
     for await (const chunk of stream) {
       assertChunkNotBlocked(chunk)
       if (chunk.candidates?.[0]?.finishReason === 'MAX_TOKENS') truncated = true
@@ -127,6 +134,14 @@ export class GeminiProvider implements AIProvider {
         const text = visibleText(chunk)
         if (text) {
           state.hasText = true
+          // Check before yielding so the chunk that confirms the loop is
+          // dropped instead of streamed. Returning here abandons the rest of
+          // the stream (for await calls the generator's return()).
+          if (guard.append(text)) {
+            console.warn('[gemini] repetition loop detected; stopping the stream')
+            yield REPETITION_NOTICE
+            return
+          }
           yield text
         }
       }

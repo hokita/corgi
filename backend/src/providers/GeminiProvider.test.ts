@@ -20,7 +20,7 @@ vi.mock('@google/generative-ai', () => ({
   },
 }))
 
-import { GeminiProvider, TRUNCATION_NOTICE } from './GeminiProvider'
+import { GeminiProvider, TRUNCATION_NOTICE, REPETITION_NOTICE } from './GeminiProvider'
 
 const noopExecutor: FunctionExecutor = vi.fn().mockResolvedValue({})
 
@@ -270,6 +270,64 @@ describe('GeminiProvider', () => {
 
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1)
     expect(items).toEqual(['# ☕ Morning Coffee Briefing'])
+    warnSpy.mockRestore()
+  })
+
+  it('stops the stream and appends a notice when the model loops', async () => {
+    // Regression: with maxOutputTokens at 15000, a repetition loop ("Let me
+    // know if you'd like to review your English mistakes...") used to run for
+    // thousands of tokens before the truncation notice kicked in.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const loopSentence =
+      "Let me know if you'd like to review your English mistakes from this conversation. "
+    let chunksConsumed = 0
+    async function* fakeStream() {
+      yield textChunk('Enjoy diving into the threads! ')
+      for (let i = 0; i < 100; i++) {
+        chunksConsumed++
+        yield textChunk(loopSentence)
+      }
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+
+    expect(items[0]).toBe('Enjoy diving into the threads! ')
+    expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
+    // The stream must be abandoned shortly after the loop is confirmed, not
+    // drained to the end.
+    expect(chunksConsumed).toBeLessThan(10)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('stops the follow-up stream when the model loops after a tool call', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    async function* firstStream() {
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [{ functionCall: { name: 'get_hacker_news_briefing', args: {} } }],
+            },
+          },
+        ],
+      }
+    }
+    const loopSentence = 'Let me know where you would like to go next! '
+    async function* followUpStream() {
+      yield textChunk('# ☕ Morning Coffee Briefing\n\nStories here.\n\n')
+      for (let i = 0; i < 100; i++) yield textChunk(loopSentence)
+    }
+    mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
+    mockGenerateContentStream.mockResolvedValueOnce({ stream: followUpStream() })
+
+    const executeFn: FunctionExecutor = vi.fn().mockResolvedValue({ stories: [] })
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Morning briefing', executeFn))
+
+    expect(items[0]).toBe('# ☕ Morning Coffee Briefing\n\nStories here.\n\n')
+    expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
     warnSpy.mockRestore()
   })
 
