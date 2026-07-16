@@ -50,6 +50,10 @@ const SUGGESTION_RESPONSE_SCHEMA: ResponseSchema = {
 }
 
 const MAX_SUGGESTIONS = 4
+const MAX_SUGGESTION_CHARACTERS = 80
+const MAX_SUGGESTION_WORDS = 6
+const SUGGESTION_MAX_OUTPUT_TOKENS = 128
+const SUGGESTION_TIMEOUT_MS = 5_000
 
 interface StreamState {
   hasText: boolean
@@ -318,7 +322,7 @@ export class GeminiProvider implements AIProvider {
     // suggest follow-ups for.
     const reply = primaryText + followUpText
     if (reply.trim()) {
-      const suggestions = await this.generateSuggestions(history, newMessage, reply)
+      const suggestions = await this.generateSuggestions(history, newMessage, reply, abort.signal)
       if (suggestions.length > 0) {
         yield { type: 'suggestions', items: suggestions }
       }
@@ -331,7 +335,8 @@ export class GeminiProvider implements AIProvider {
   private async generateSuggestions(
     history: Message[],
     newMessage: string,
-    assistantReply: string
+    assistantReply: string,
+    requestSignal: AbortSignal
   ): Promise<string[]> {
     const prompt = buildSuggestionPrompt(history, newMessage, assistantReply)
     const generation = startObservation(
@@ -339,6 +344,11 @@ export class GeminiProvider implements AIProvider {
       { model: GEMINI_SUGGESTION_MODEL, input: toTraceValue(prompt) },
       { asType: 'generation' }
     )
+    const abort = new AbortController()
+    const abortSuggestion = () => abort.abort()
+    requestSignal.addEventListener('abort', abortSuggestion, { once: true })
+    if (requestSignal.aborted) abortSuggestion()
+    const timeout = setTimeout(abortSuggestion, SUGGESTION_TIMEOUT_MS)
     try {
       const model = this.client.getGenerativeModel({
         model: GEMINI_SUGGESTION_MODEL,
@@ -346,9 +356,10 @@ export class GeminiProvider implements AIProvider {
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: SUGGESTION_RESPONSE_SCHEMA,
+          maxOutputTokens: SUGGESTION_MAX_OUTPUT_TOKENS,
         },
       })
-      const result = await model.generateContent(prompt)
+      const result = await model.generateContent(prompt, { signal: abort.signal })
       const items = parseSuggestions(result.response.text())
       generation
         .update({
@@ -361,6 +372,9 @@ export class GeminiProvider implements AIProvider {
       console.error('[gemini] failed to generate suggestions:', err)
       generation.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
       return []
+    } finally {
+      clearTimeout(timeout)
+      requestSignal.removeEventListener('abort', abortSuggestion)
     }
   }
 }
@@ -376,9 +390,21 @@ function parseSuggestions(raw: string): string[] {
   }
   const items = (parsed as { suggestions?: unknown }).suggestions
   if (!Array.isArray(items)) return []
+  const seen = new Set<string>()
   return items
     .filter((s): s is string => typeof s === 'string')
     .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+    .filter(
+      (s) =>
+        s.length > 0 &&
+        s.length <= MAX_SUGGESTION_CHARACTERS &&
+        s.split(/\s+/).length <= MAX_SUGGESTION_WORDS
+    )
+    .filter((s) => {
+      const key = s.toLocaleLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     .slice(0, MAX_SUGGESTIONS)
 }

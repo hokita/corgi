@@ -395,9 +395,14 @@ describe('GeminiProvider', () => {
     expect(mockGetGenerativeModel).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'gemini-2.5-flash-lite',
-        generationConfig: expect.objectContaining({ responseMimeType: 'application/json' }),
+        generationConfig: expect.objectContaining({
+          responseMimeType: 'application/json',
+          maxOutputTokens: 128,
+        }),
       })
     )
+    const requestOptions = mockGenerateContent.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('clamps suggestions to at most 4 and drops blank labels', async () => {
@@ -409,6 +414,57 @@ describe('GeminiProvider', () => {
     const provider = new GeminiProvider('fake-key')
     const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
     expect(items).toContainEqual({ type: 'suggestions', items: ['a', 'b', 'c', 'd'] })
+  })
+
+  it('drops oversized, overlong, and duplicate suggestion labels', async () => {
+    async function* fakeStream() {
+      yield textChunk('A reply.')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    mockGenerateContent.mockResolvedValueOnce(
+      suggestionResult([
+        'A'.repeat(81),
+        'one two three four five six seven',
+        'Useful next step',
+        'useful NEXT step',
+        'Another option',
+      ])
+    )
+    const provider = new GeminiProvider('fake-key')
+    const items = await collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    expect(items).toContainEqual({
+      type: 'suggestions',
+      items: ['Useful next step', 'Another option'],
+    })
+  })
+
+  it('aborts a stalled suggestion request after 5 seconds and keeps the reply', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    async function* fakeStream() {
+      yield textChunk('A reply.')
+    }
+    mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
+    mockGenerateContent.mockImplementationOnce(
+      (_prompt: string, options: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          })
+        })
+    )
+
+    const provider = new GeminiProvider('fake-key')
+    const result = collectStream(provider.chatStream([], 'Hi', noopExecutor))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await expect(result).resolves.toEqual(['A reply.'])
+    const requestOptions = mockGenerateContent.mock.calls[0][1] as { signal: AbortSignal }
+    expect(requestOptions.signal.aborted).toBe(true)
+    errorSpy.mockRestore()
+    vi.useRealTimers()
   })
 
   it('yields no suggestions when the flash-lite call returns an empty list', async () => {
