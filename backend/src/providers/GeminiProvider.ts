@@ -1,17 +1,19 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import type {
   Content,
   EnhancedGenerateContentResponse,
   Part,
+  ResponseSchema,
   Tool,
   ToolConfig,
 } from '@google/generative-ai'
 import { startObservation } from '@langfuse/tracing'
 import type { AIProvider, Message, StreamItem, FunctionExecutor } from './AIProvider'
-import { GEMINI_CHAT_MODEL } from '../config/gemini'
+import { GEMINI_CHAT_MODEL, GEMINI_SUGGESTION_MODEL } from '../config/gemini'
 import { toUsageDetails, errorMessage, toTraceValue } from '../config/langfuse'
 import type { GeminiUsageMetadata } from '../config/langfuse'
 import { CHAT_SYSTEM_PROMPT } from '../prompts/chat'
+import { SUGGESTION_SYSTEM_PROMPT, buildSuggestionPrompt } from '../prompts/suggestions'
 import { chatFunctionDeclarations } from '../tools/registry'
 import { RepetitionGuard } from './repetitionGuard'
 
@@ -30,17 +32,26 @@ function toGeminiHistory(history: Message[]): Content[] {
   }))
 }
 
-function parseSuggestOptionsItems(args: unknown): string[] | undefined {
-  const items = (args as { items?: string[] } | undefined)?.items
-  return Array.isArray(items) && items.length > 0 ? items : undefined
-}
-
 // The SDK's ToolConfig doesn't model this field; it is required when mixing
 // built-in tools (googleSearch) with function calling.
 const SERVER_SIDE_TOOL_CONFIG = { includeServerSideToolInvocations: true } as unknown as ToolConfig
 
+// Structured-output schema for the dedicated suggestion model: a JSON object
+// with a `suggestions` array of short button labels.
+const SUGGESTION_RESPONSE_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    suggestions: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+    },
+  },
+  required: ['suggestions'],
+}
+
+const MAX_SUGGESTIONS = 4
+
 interface StreamState {
-  suggestions?: string[]
   hasText: boolean
   usageMetadata?: GeminiUsageMetadata
 }
@@ -99,7 +110,6 @@ export class GeminiProvider implements AIProvider {
     hooks: {
       rawParts?: Part[]
       onFunctionCall?: (name: string, args: unknown) => Promise<void>
-      onSuggestOptionsCall?: () => void
       abort?: () => void
     } = {}
   ): AsyncIterable<string> {
@@ -120,12 +130,7 @@ export class GeminiProvider implements AIProvider {
         for (const part of candidate.content?.parts ?? []) {
           if (!('functionCall' in part) || !part.functionCall) continue
           const { name, args } = part.functionCall
-          if (name === 'suggest_options') {
-            hasFunctionCall = true
-            const items = parseSuggestOptionsItems(args)
-            if (items) state.suggestions = items
-            hooks.onSuggestOptionsCall?.()
-          } else if (hooks.onFunctionCall) {
+          if (hooks.onFunctionCall) {
             hasFunctionCall = true
             await hooks.onFunctionCall(name, args)
           }
@@ -209,6 +214,7 @@ export class GeminiProvider implements AIProvider {
       { asType: 'generation' }
     )
     let primaryText = ''
+    let followUpText = ''
     try {
       const result = await chat.sendMessageStream(newMessage, { signal: abort.signal })
       for await (const text of this.emitTextFromStream(result.stream, state, {
@@ -230,15 +236,6 @@ export class GeminiProvider implements AIProvider {
           }
           toolSpan.update({ output: toTraceValue(response) }).end()
           pendingFunctionResponses.push({ name, response })
-        },
-        // The model turn is replayed verbatim in the follow-up call, and the API
-        // requires a functionResponse for every functionCall in it — including
-        // suggest_options, even though it is handled client-side.
-        onSuggestOptionsCall: () => {
-          pendingFunctionResponses.push({
-            name: 'suggest_options',
-            response: { result: 'displayed' },
-          })
         },
       })) {
         primaryText += text
@@ -282,7 +279,6 @@ export class GeminiProvider implements AIProvider {
         { model: GEMINI_CHAT_MODEL, input: toTraceValue(manualHistory) },
         { asType: 'generation' }
       )
-      let followUpText = ''
       try {
         const followUp = await model.generateContentStream(
           {
@@ -315,8 +311,74 @@ export class GeminiProvider implements AIProvider {
         .end()
     }
 
-    if (state.suggestions) {
-      yield { type: 'suggestions', items: state.suggestions }
+    // Suggestion buttons come from a separate, cheaper flash model rather than
+    // an inline tool call on the main model: it keeps the chat prompt simple and
+    // makes suggestions consistent instead of depending on the thinking model
+    // remembering to call a tool. Only run it once there is a real reply to
+    // suggest follow-ups for.
+    const reply = primaryText + followUpText
+    if (reply.trim()) {
+      const suggestions = await this.generateSuggestions(history, newMessage, reply)
+      if (suggestions.length > 0) {
+        yield { type: 'suggestions', items: suggestions }
+      }
     }
   }
+
+  // Dedicated flash-model call that turns the finished reply into 2–4 tappable
+  // button labels. Failures are swallowed: suggestions are a nice-to-have, and a
+  // problem here must never discard or fail the reply that already streamed.
+  private async generateSuggestions(
+    history: Message[],
+    newMessage: string,
+    assistantReply: string
+  ): Promise<string[]> {
+    const prompt = buildSuggestionPrompt(history, newMessage, assistantReply)
+    const generation = startObservation(
+      'gemini-suggestions',
+      { model: GEMINI_SUGGESTION_MODEL, input: toTraceValue(prompt) },
+      { asType: 'generation' }
+    )
+    try {
+      const model = this.client.getGenerativeModel({
+        model: GEMINI_SUGGESTION_MODEL,
+        systemInstruction: SUGGESTION_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: SUGGESTION_RESPONSE_SCHEMA,
+        },
+      })
+      const result = await model.generateContent(prompt)
+      const items = parseSuggestions(result.response.text())
+      generation
+        .update({
+          output: toTraceValue(items),
+          usageDetails: toUsageDetails(result.response.usageMetadata),
+        })
+        .end()
+      return items
+    } catch (err) {
+      console.error('[gemini] failed to generate suggestions:', err)
+      generation.update({ level: 'ERROR', statusMessage: errorMessage(err) }).end()
+      return []
+    }
+  }
+}
+
+// Parses the suggestion model's JSON output into a clean list of button labels,
+// tolerating malformed responses by returning an empty list.
+function parseSuggestions(raw: string): string[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  const items = (parsed as { suggestions?: unknown }).suggestions
+  if (!Array.isArray(items)) return []
+  return items
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .slice(0, MAX_SUGGESTIONS)
 }

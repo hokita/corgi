@@ -2,6 +2,14 @@
 
 **Date:** 2026-06-24
 
+> **Update (2026-07-16):** Suggestion buttons are no longer produced by an inline
+> `suggest_options` tool call on the main chat model. After the reply finishes
+> streaming, `GeminiProvider` makes a separate call to a lightweight flash model
+> (`GEMINI_SUGGESTION_MODEL` = `gemini-2.5-flash-lite`) that returns the button
+> labels as structured JSON. The stream still yields the same
+> `{ type: 'suggestions', items }` item, so the SSE protocol, Firestore storage,
+> and all frontend behavior below are unchanged.
+
 ## Overview
 
 When the AI agent wants to ask a clarifying question or suggest next steps, it displays interactive buttons below its message. The user can tap a button to send it as a reply, or type their own message instead.
