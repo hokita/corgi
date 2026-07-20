@@ -1,9 +1,9 @@
-import { initializeApp } from 'firebase-admin/app'
 import { initLangfuse, shutdownLangfuse } from './config/langfuse'
+import { initFirebase } from './config/firebase'
 import { createApp } from './app'
 
 initLangfuse()
-initializeApp()
+initFirebase()
 
 const port = Number(process.env.PORT) || 8080
 const server = createApp().listen(port, () => {
