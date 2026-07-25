@@ -139,6 +139,40 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     expect(screen.getByRole('textbox')).not.toBeDisabled()
   })
 
+  it('re-enables the message input after deleting the conversation that was streaming', async () => {
+    let capturedCallbacks: StreamCallbacks | undefined
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockResolvedValue([{ role: 'assistant', content: 'existing answer' }])
+    mockApi.sendMessage.mockImplementation(
+      (_id: string, _msg: string, callbacks: StreamCallbacks) => {
+        capturedCallbacks = callbacks
+        return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+      }
+    )
+    mockApi.deleteConversation.mockResolvedValue(undefined)
+
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('existing answer'))
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'follow up' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => expect(capturedCallbacks).toBeDefined())
+    expect(screen.getByRole('textbox')).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByRole('button', { name: 'Delete conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete conversation' }))
+    await waitFor(() => expect(screen.getByText('Start a conversation')).toBeInTheDocument())
+
+    expect(screen.getByRole('textbox')).not.toBeDisabled()
+  })
+
   it('does not leak chunks from an abandoned stream into the conversation switched to', async () => {
     let capturedCallbacks: StreamCallbacks | undefined
     mockApi.createConversation.mockImplementation((_msg: string, callbacks: StreamCallbacks) => {

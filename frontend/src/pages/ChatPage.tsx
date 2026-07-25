@@ -62,6 +62,7 @@ export default function ChatPage({ user }: Props) {
       await api.deleteConversation(id)
       setConversations((prev) => prev.filter((c) => c.id !== id))
       if (activeId === id) {
+        abandonStream()
         setActiveId(null)
         setMessages([])
       }
