@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { api } from '../api'
 import type { StreamCallbacks } from '../api'
@@ -21,9 +21,22 @@ export function useChatStream({
 }: UseChatStreamArgs) {
   const [sending, setSending] = useState(false)
   const [currentStep, setCurrentStep] = useState<string | null>(null)
+  // Identifies the in-flight stream. Bumped whenever the user leaves the
+  // conversation being streamed into (switches conversation, starts a new
+  // chat) so the abandoned stream's callbacks stop touching UI state — the
+  // request itself keeps running so the backend can still persist the reply.
+  const generation = useRef(0)
+
+  function abandon() {
+    generation.current += 1
+    setSending(false)
+    setCurrentStep(null)
+  }
 
   async function send(text: string) {
     if (sending) return
+    const myGeneration = ++generation.current
+    const isCurrent = () => generation.current === myGeneration
     setCurrentStep(null)
     setSending(true)
     const userMsg: Message = { role: 'user', content: text, createdAt: new Date().toISOString() }
@@ -35,6 +48,7 @@ export function useChatStream({
     setMessages((prev) => [...prev, userMsg, placeholder])
 
     const appendChunk = (chunk: string) => {
+      if (!isCurrent()) return
       setMessages((prev) => {
         const msgs = [...prev]
         msgs[msgs.length - 1] = {
@@ -46,6 +60,7 @@ export function useChatStream({
     }
 
     const onError = (message: string) => {
+      if (!isCurrent()) return
       setCurrentStep(null)
       setMessages((prev) => prev.slice(0, -1))
       setSending(false)
@@ -58,26 +73,32 @@ export function useChatStream({
       // Only ever fired when creating a new conversation
       onMeta: ({ conversationId: newId, title }) => {
         conversationId = newId
-        setActiveId(newId)
+        // The conversation was really created server-side, so it belongs in
+        // the list regardless of whether the user is still looking at it.
         setConversations((prev) => [
           { id: newId, title, lastMessage: '', updatedAt: new Date().toISOString() },
           ...prev,
         ])
+        if (isCurrent()) setActiveId(newId)
       },
       onChunk: (chunk) => {
         accumulated += chunk
         appendChunk(chunk)
       },
       onSuggestions: (items) => {
+        if (!isCurrent()) return
         setMessages((prev) => {
           const msgs = [...prev]
           msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], suggestions: items }
           return msgs
         })
       },
-      onProgress: setCurrentStep,
+      onProgress: (step) => {
+        if (isCurrent()) setCurrentStep(step)
+      },
       onDone: () => {
-        setCurrentStep(null)
+        // Keep the sidebar's last-message preview accurate even if the user
+        // has since navigated away from this conversation.
         setConversations((prev) =>
           prev.map((c) =>
             c.id === conversationId
@@ -85,6 +106,8 @@ export function useChatStream({
               : c
           )
         )
+        if (!isCurrent()) return
+        setCurrentStep(null)
         setSending(false)
       },
       onError,
@@ -100,5 +123,5 @@ export function useChatStream({
     }
   }
 
-  return { sending, currentStep, send }
+  return { sending, currentStep, send, abandon }
 }

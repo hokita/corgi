@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { User } from 'firebase/auth'
 import type { StreamCallbacks } from '../api'
@@ -109,6 +109,61 @@ describe('ChatPage error toasts', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(screen.getByText('Failed to send message')).toBeInTheDocument())
+  })
+})
+
+describe('ChatPage switching conversations while a message is streaming', () => {
+  it('re-enables the message input after switching away from a still-streaming conversation', async () => {
+    let capturedCallbacks: StreamCallbacks | undefined
+    mockApi.createConversation.mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+      capturedCallbacks = callbacks
+      return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+    })
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockResolvedValue([{ role: 'assistant', content: 'existing answer' }])
+
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'new question' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => expect(capturedCallbacks).toBeDefined())
+    expect(screen.getByRole('textbox')).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('existing answer'))
+
+    expect(screen.getByRole('textbox')).not.toBeDisabled()
+  })
+
+  it('does not leak chunks from an abandoned stream into the conversation switched to', async () => {
+    let capturedCallbacks: StreamCallbacks | undefined
+    mockApi.createConversation.mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+      capturedCallbacks = callbacks
+      return new Promise(() => {})
+    })
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockResolvedValue([{ role: 'assistant', content: 'existing answer' }])
+
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'new question' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => expect(capturedCallbacks).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('existing answer'))
+
+    act(() => capturedCallbacks!.onChunk('leaked text'))
+
+    expect(screen.queryByText(/leaked text/)).not.toBeInTheDocument()
   })
 })
 

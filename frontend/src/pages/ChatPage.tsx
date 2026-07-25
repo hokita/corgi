@@ -26,6 +26,7 @@ export default function ChatPage({ user }: Props) {
     sending,
     currentStep,
     send: handleSend,
+    abandon: abandonStream,
   } = useChatStream({
     activeId,
     setActiveId,
@@ -43,6 +44,7 @@ export default function ChatPage({ user }: Props) {
 
   const loadConversation = useCallback(
     async (id: string) => {
+      abandonStream()
       setActiveId(id)
       setDrawerOpen(false)
       try {
@@ -52,7 +54,7 @@ export default function ChatPage({ user }: Props) {
         showToast('Failed to load messages')
       }
     },
-    [showToast]
+    [showToast, abandonStream]
   )
 
   async function handleDelete(id: string) {
@@ -69,6 +71,7 @@ export default function ChatPage({ user }: Props) {
   }
 
   function handleNewChat() {
+    abandonStream()
     setActiveId(null)
     setMessages([])
     setDrawerOpen(false)
