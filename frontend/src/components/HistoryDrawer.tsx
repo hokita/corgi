@@ -50,6 +50,7 @@ export default function HistoryDrawer({
           {conversations.map((c) => (
             <div
               key={c.id}
+              data-testid={`conversation-row-${c.id}`}
               onClick={() => onSelect(c.id)}
               className={`flex items-center px-4 py-3 border-b border-gray-100 cursor-pointer ${c.id === activeId ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
             >

@@ -51,7 +51,7 @@ export default function MessageList({ messages, onSuggestionClick, currentStep }
             >
               {m.content !== '' && (
                 <div
-                  data-testid="message-balloon"
+                  data-testid={`message-balloon-${m.role}`}
                   className={`${BALLOON_BASE} ${m.role === 'user' ? BALLOON_USER : BALLOON_ASSISTANT}`}
                 >
                   {m.role === 'user' ? m.content : <MarkdownMessage content={m.content} />}

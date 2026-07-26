@@ -52,4 +52,10 @@ describe('SuggestionButtons', () => {
     expect(screen.getByText('Yes').closest('button')!.className).toContain('text-[#0084ff]')
     expect(screen.getByText('No').closest('button')!.className).toContain('text-[#0084ff]')
   })
+
+  it('identifies each chip with a data-testid keyed by its label', () => {
+    render(<SuggestionButtons items={['Yes', 'No']} disabled={false} onSelect={() => {}} />)
+    expect(screen.getByTestId('suggestion-chip-Yes')).toHaveTextContent('Yes')
+    expect(screen.getByTestId('suggestion-chip-No')).toHaveTextContent('No')
+  })
 })

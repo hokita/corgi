@@ -6,6 +6,7 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:e2e": "tsx --env-file=.env.e2e src/index.e2e.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src",
