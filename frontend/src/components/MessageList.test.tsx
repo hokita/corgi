@@ -102,8 +102,14 @@ describe('MessageList', () => {
       <MessageList messages={[msg('assistant', '')]} currentStep="Analyzing your message..." />
     )
     expect(screen.getByText('Analyzing your message...')).toBeInTheDocument()
-    expect(screen.queryByTestId('message-balloon')).toBeNull()
+    expect(screen.queryByTestId('message-balloon-assistant')).toBeNull()
     expect(screen.queryByRole('button', { name: /copy/i })).toBeNull()
+  })
+
+  it('distinguishes user and assistant balloons via data-testid', () => {
+    render(<MessageList messages={[msg('user', 'hi'), msg('assistant', 'hello')]} />)
+    expect(screen.getByTestId('message-balloon-user')).toHaveTextContent('hi')
+    expect(screen.getByTestId('message-balloon-assistant')).toHaveTextContent('hello')
   })
 
   it('renders the thinking step only above the last assistant message', () => {

@@ -3,21 +3,22 @@ import cors from 'cors'
 import { authMiddleware } from './middleware/auth'
 import { GeminiProvider } from './providers/GeminiProvider'
 import { GeminiTitleGenerator } from './providers/GeminiTitleGenerator'
+import type { AIProvider, TitleGenerator } from './providers/AIProvider'
 import { createConversationsRouter } from './routes/conversations'
 
-export function createApp() {
+interface CreateAppOptions {
+  ai?: AIProvider
+  titleGen?: TitleGenerator
+}
+
+export function createApp(options: CreateAppOptions = {}) {
   const app = express()
   // In dev (FRONTEND_URL unset), cors defaults to allow all origins — intentional for local development
   app.use(cors({ origin: process.env.FRONTEND_URL }))
   app.use(express.json())
   app.get('/health', (_req, res) => res.json({ ok: true }))
-  app.use(
-    '/api/conversations',
-    authMiddleware,
-    createConversationsRouter(
-      new GeminiProvider(process.env.GEMINI_API_KEY!, { googleSearch: true }),
-      new GeminiTitleGenerator(process.env.GEMINI_API_KEY!)
-    )
-  )
+  const ai = options.ai ?? new GeminiProvider(process.env.GEMINI_API_KEY!, { googleSearch: true })
+  const titleGen = options.titleGen ?? new GeminiTitleGenerator(process.env.GEMINI_API_KEY!)
+  app.use('/api/conversations', authMiddleware, createConversationsRouter(ai, titleGen))
   return app
 }

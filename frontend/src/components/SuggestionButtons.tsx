@@ -14,6 +14,7 @@ export default function SuggestionButtons({ items, selectedItem, disabled, onSel
         return (
           <button
             key={item}
+            data-testid={`suggestion-chip-${item}`}
             onClick={() => !disabled && onSelect(item)}
             disabled={disabled}
             className={`px-3 py-1 rounded-full text-sm border transition-colors ${

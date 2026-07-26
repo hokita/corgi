@@ -1,8 +1,16 @@
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 
 export default function LoginPage() {
   async function handleSignIn() {
+    if (import.meta.env.VITE_E2E === 'true') {
+      await signInWithEmailAndPassword(
+        auth,
+        import.meta.env.VITE_E2E_TEST_EMAIL,
+        import.meta.env.VITE_E2E_TEST_PASSWORD
+      )
+      return
+    }
     const provider = new GoogleAuthProvider()
     await signInWithPopup(auth, provider)
   }
