@@ -199,6 +199,66 @@ describe('ChatPage switching conversations while a message is streaming', () => 
 
     expect(screen.queryByText(/leaked text/)).not.toBeInTheDocument()
   })
+
+  it('shows the finished answer after switching back to a conversation that kept streaming in the background', async () => {
+    let capturedCallbacks: StreamCallbacks | undefined
+    let c1FetchCount = 0
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+      { id: 'c2', title: 'Chat 2', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockImplementation((id: string) => {
+      if (id === 'c1') {
+        c1FetchCount += 1
+        if (c1FetchCount < 3) {
+          return Promise.resolve([{ role: 'user', content: 'question' }])
+        }
+        return Promise.resolve([
+          { role: 'user', content: 'question' },
+          { role: 'user', content: 'follow up' },
+          { role: 'assistant', content: 'the final answer' },
+        ])
+      }
+      return Promise.resolve([{ role: 'assistant', content: 'chat 2 answer' }])
+    })
+    mockApi.sendMessage.mockImplementation(
+      (_id: string, _msg: string, callbacks: StreamCallbacks) => {
+        capturedCallbacks = callbacks
+        return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+      }
+    )
+
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('question'))
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'follow up' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => expect(capturedCallbacks).toBeDefined())
+
+    // switch away to a different conversation while c1 keeps streaming in the background
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 2'))
+    fireEvent.click(screen.getByText('Chat 2'))
+    await waitFor(() => screen.getByText('chat 2 answer'))
+
+    // switch back to c1 before the background stream has finished
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('question'))
+    expect(screen.queryByText('the final answer')).not.toBeInTheDocument()
+
+    // the background stream finally completes and persists the reply
+    await act(async () => {
+      capturedCallbacks!.onDone()
+    })
+
+    await waitFor(() => expect(screen.getByText('the final answer')).toBeInTheDocument())
+  })
 })
 
 describe('ChatPage compose button', () => {
