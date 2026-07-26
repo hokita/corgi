@@ -119,7 +119,15 @@ export function useChatStream({
           // the messages fetched on that earlier navigation don't include
           // it — refetch so it actually shows up.
           if (activeIdRef.current === conversationId) {
-            api.getMessages(conversationId).then(setMessages).catch(() => {})
+            api
+              .getMessages(conversationId)
+              .then((msgs) => {
+                // The user may have navigated away again while this was in
+                // flight — only apply it if they're still looking at the
+                // conversation it belongs to.
+                if (activeIdRef.current === conversationId) setMessages(msgs)
+              })
+              .catch(() => {})
           }
           return
         }

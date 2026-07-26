@@ -259,6 +259,85 @@ describe('ChatPage switching conversations while a message is streaming', () => 
 
     await waitFor(() => expect(screen.getByText('the final answer')).toBeInTheDocument())
   })
+
+  it('does not let a delayed post-stream refetch overwrite a conversation switched to afterward', async () => {
+    let capturedCallbacks: StreamCallbacks | undefined
+    let c1FetchCount = 0
+    let resolveRefetch: (msgs: unknown[]) => void
+    mockApi.listConversations.mockResolvedValue([
+      { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
+      { id: 'c2', title: 'Chat 2', lastMessage: '', updatedAt: '' },
+      { id: 'c3', title: 'Chat 3', lastMessage: '', updatedAt: '' },
+    ])
+    mockApi.getMessages.mockImplementation((id: string) => {
+      if (id === 'c1') {
+        c1FetchCount += 1
+        // Calls 1 and 2 are the initial open and the switch-back-before-finish
+        // fetch; both still miss the reply. Call 3 is onDone's own refetch —
+        // held open so the test controls exactly when it resolves.
+        if (c1FetchCount < 3) {
+          return Promise.resolve([{ role: 'user', content: 'question' }])
+        }
+        return new Promise((resolve) => {
+          resolveRefetch = resolve
+        })
+      }
+      if (id === 'c2') return Promise.resolve([{ role: 'assistant', content: 'chat 2 answer' }])
+      return Promise.resolve([{ role: 'assistant', content: 'chat 3 answer' }])
+    })
+    mockApi.sendMessage.mockImplementation(
+      (_id: string, _msg: string, callbacks: StreamCallbacks) => {
+        capturedCallbacks = callbacks
+        return new Promise(() => {})
+      }
+    )
+
+    render(<ChatPage user={fakeUser} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('question'))
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'follow up' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => expect(capturedCallbacks).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 2'))
+    fireEvent.click(screen.getByText('Chat 2'))
+    await waitFor(() => screen.getByText('chat 2 answer'))
+
+    // switch back to c1 before the background stream has finished
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 1'))
+    fireEvent.click(screen.getByText('Chat 1'))
+    await waitFor(() => screen.getByText('question'))
+
+    // the background stream finishes while c1 is still on screen — this
+    // kicks off the completion refetch (held open by the mock above)
+    await act(async () => {
+      capturedCallbacks!.onDone()
+    })
+
+    // before that refetch resolves, the user moves on to a third conversation
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
+    await waitFor(() => screen.getByText('Chat 3'))
+    fireEvent.click(screen.getByText('Chat 3'))
+    await waitFor(() => screen.getByText('chat 3 answer'))
+
+    // only now does the stale refetch for c1 resolve — it must not clobber c3
+    await act(async () => {
+      resolveRefetch([
+        { role: 'user', content: 'question' },
+        { role: 'user', content: 'follow up' },
+        { role: 'assistant', content: 'the final answer' },
+      ])
+    })
+
+    expect(screen.getByText('chat 3 answer')).toBeInTheDocument()
+    expect(screen.queryByText('the final answer')).not.toBeInTheDocument()
+  })
 })
 
 describe('ChatPage compose button', () => {
