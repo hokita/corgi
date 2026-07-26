@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { api } from '../api'
 import type { StreamCallbacks } from '../api'
@@ -26,6 +26,13 @@ export function useChatStream({
   // chat) so the abandoned stream's callbacks stop touching UI state — the
   // request itself keeps running so the backend can still persist the reply.
   const generation = useRef(0)
+  // Mirrors the activeId prop so callbacks running long after the render
+  // that started them (e.g. onDone firing after the user has navigated
+  // elsewhere and back) can see which conversation is on screen right now.
+  const activeIdRef = useRef(activeId)
+  useEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
 
   function abandon() {
     generation.current += 1
@@ -106,7 +113,26 @@ export function useChatStream({
               : c
           )
         )
-        if (!isCurrent()) return
+        if (!isCurrent()) {
+          // The user abandoned this stream but has since navigated back to
+          // the same conversation. The reply was only persisted just now, so
+          // the messages fetched on that earlier navigation don't include
+          // it — refetch so it actually shows up.
+          if (activeIdRef.current === conversationId) {
+            // Snapshot the generation so a stale response can't overwrite
+            // state that's moved on by the time it resolves — whether the
+            // user navigated away or just started another send in this same
+            // conversation (both bump `generation`).
+            const generationAtRefetch = generation.current
+            api
+              .getMessages(conversationId)
+              .then((msgs) => {
+                if (generation.current === generationAtRefetch) setMessages(msgs)
+              })
+              .catch(() => {})
+          }
+          return
+        }
         setCurrentStep(null)
         setSending(false)
       },
