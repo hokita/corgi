@@ -119,13 +119,15 @@ export function useChatStream({
           // the messages fetched on that earlier navigation don't include
           // it — refetch so it actually shows up.
           if (activeIdRef.current === conversationId) {
+            // Snapshot the generation so a stale response can't overwrite
+            // state that's moved on by the time it resolves — whether the
+            // user navigated away or just started another send in this same
+            // conversation (both bump `generation`).
+            const generationAtRefetch = generation.current
             api
               .getMessages(conversationId)
               .then((msgs) => {
-                // The user may have navigated away again while this was in
-                // flight — only apply it if they're still looking at the
-                // conversation it belongs to.
-                if (activeIdRef.current === conversationId) setMessages(msgs)
+                if (generation.current === generationAtRefetch) setMessages(msgs)
               })
               .catch(() => {})
           }
