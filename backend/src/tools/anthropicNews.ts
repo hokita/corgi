@@ -22,6 +22,11 @@ interface RssFeed {
 
 const ANTHROPIC_NEWS_RSS_URL = 'https://openrss.org/feed/www.anthropic.com/news'
 
+function parsePublishedAt(pubDate: string): string | null {
+  const date = new Date(pubDate)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 export async function fetchAnthropicNews(): Promise<AnthropicNewsPost[]> {
   const res = await fetch(ANTHROPIC_NEWS_RSS_URL)
   if (!res.ok) {
@@ -32,11 +37,12 @@ export async function fetchAnthropicNews(): Promise<AnthropicNewsPost[]> {
   const feed = parser.parse(xml) as RssFeed
   const rawItems = feed.rss?.channel?.item
   const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : []
-  return items
-    .filter((item): item is Required<RssItem> => Boolean(item.title && item.link && item.pubDate))
-    .map((item) => ({
-      title: item.title,
-      url: item.link,
-      publishedAt: new Date(item.pubDate).toISOString(),
-    }))
+  const posts: AnthropicNewsPost[] = []
+  for (const item of items) {
+    if (!item.title || !item.link || !item.pubDate) continue
+    const publishedAt = parsePublishedAt(item.pubDate)
+    if (!publishedAt) continue
+    posts.push({ title: item.title, url: item.link, publishedAt })
+  }
+  return posts
 }

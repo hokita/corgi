@@ -56,6 +56,17 @@ describe('fetchAnthropicNews', () => {
     expect(posts).toEqual([])
   })
 
+  it('skips items with an unparseable pubDate instead of throwing', async () => {
+    const xml = makeFeed(
+      '<item><title><![CDATA[Bad Date Post]]></title><link><![CDATA[https://www.anthropic.com/news/bad-date]]></link><pubDate>not a date</pubDate></item>' +
+        '<item><title><![CDATA[Good Post]]></title><link><![CDATA[https://www.anthropic.com/news/good]]></link><pubDate>Tue, 02 Jun 2026 00:00:00 GMT</pubDate></item>'
+    )
+    mockFetch.mockResolvedValueOnce({ ok: true, text: async () => xml })
+    const posts = await fetchAnthropicNews()
+    expect(posts).toHaveLength(1)
+    expect(posts[0].title).toBe('Good Post')
+  })
+
   it('throws when the feed responds with a non-OK status', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
     await expect(fetchAnthropicNews()).rejects.toThrow(
