@@ -67,6 +67,17 @@ describe('fetchAnthropicNews', () => {
     expect(posts[0].title).toBe('Good Post')
   })
 
+  it('returns posts sorted by publishedAt descending, regardless of feed order', async () => {
+    const xml = makeFeed(
+      '<item><title><![CDATA[Older Post]]></title><link><![CDATA[https://www.anthropic.com/news/older]]></link><pubDate>Mon, 01 Jun 2026 00:00:00 GMT</pubDate></item>' +
+        '<item><title><![CDATA[Newest Post]]></title><link><![CDATA[https://www.anthropic.com/news/newest]]></link><pubDate>Fri, 24 Jul 2026 04:00:00 GMT</pubDate></item>' +
+        '<item><title><![CDATA[Middle Post]]></title><link><![CDATA[https://www.anthropic.com/news/middle]]></link><pubDate>Tue, 09 Jun 2026 00:00:00 GMT</pubDate></item>'
+    )
+    mockFetch.mockResolvedValueOnce({ ok: true, text: async () => xml })
+    const posts = await fetchAnthropicNews()
+    expect(posts.map((p) => p.title)).toEqual(['Newest Post', 'Middle Post', 'Older Post'])
+  })
+
   it('throws when the feed responds with a non-OK status', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
     await expect(fetchAnthropicNews()).rejects.toThrow(

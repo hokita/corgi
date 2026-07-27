@@ -44,5 +44,5 @@ export async function fetchAnthropicNews(): Promise<AnthropicNewsPost[]> {
     if (!publishedAt) continue
     posts.push({ title: item.title, url: item.link, publishedAt })
   }
-  return posts
+  return posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 }
