@@ -7,6 +7,7 @@ import MessageInput from '../components/MessageInput'
 import HistoryDrawer from '../components/HistoryDrawer'
 import UserMenu from '../components/UserMenu'
 import MorningBriefingButton from '../components/MorningBriefingButton'
+import ClaudeCodeNewsButton from '../components/ClaudeCodeNewsButton'
 import { useToast } from '../hooks/useToast'
 import { useChatStream } from '../hooks/useChatStream'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -110,7 +111,10 @@ export default function ChatPage({ user }: Props) {
       {messages.length === 0 && !sending ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
           Start a conversation
-          <MorningBriefingButton onSend={handleSend} disabled={sending} />
+          <div className="flex gap-2">
+            <MorningBriefingButton onSend={handleSend} disabled={sending} />
+            <ClaudeCodeNewsButton onSend={handleSend} disabled={sending} />
+          </div>
         </div>
       ) : (
         <MessageList messages={messages} onSuggestionClick={handleSend} currentStep={currentStep} />
