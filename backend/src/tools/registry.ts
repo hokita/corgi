@@ -5,6 +5,8 @@ import type { EnglishMistakeData, GetMistakesParams } from '../models/api'
 import * as db from '../services/firestore'
 import { getHNStories } from '../services/hnCache'
 import { HN_BRIEFING_PROMPT } from '../prompts/hackernews'
+import { getAnthropicNews } from '../services/anthropicNewsCache'
+import { ANTHROPIC_NEWS_BRIEFING_PROMPT } from '../prompts/anthropicNews'
 
 export interface ToolContext {
   uid: string
@@ -110,6 +112,23 @@ const toolDefinitions: ToolDefinition[] = [
       ctx.emitProgress('Fetching Hacker News front page...')
       const stories = await getHNStories()
       return { stories, format_instructions: HN_BRIEFING_PROMPT }
+    },
+  },
+  {
+    declaration: {
+      name: 'get_anthropic_news_briefing',
+      description:
+        "Fetch the latest posts from Anthropic's official news page and render a briefing. Call when the user asks for Claude Code updates, Anthropic news, or what's new from Anthropic/Claude.",
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {},
+        required: [],
+      },
+    },
+    execute: async (ctx) => {
+      ctx.emitProgress('Fetching Anthropic news...')
+      const posts = await getAnthropicNews()
+      return { posts, format_instructions: ANTHROPIC_NEWS_BRIEFING_PROMPT }
     },
   },
 ]
