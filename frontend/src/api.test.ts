@@ -111,6 +111,17 @@ describe('api.sendMessage', () => {
     expect(onDone).not.toHaveBeenCalled()
   })
 
+  it('calls onError when the stream closes without a done or error event', async () => {
+    mockStreamResponse([{ type: 'chunk', text: 'Hello' }])
+    const onChunk = vi.fn()
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await api.sendMessage('c1', 'Follow up', { onChunk, onDone, onError })
+    expect(onChunk).toHaveBeenCalledWith('Hello')
+    expect(onDone).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.any(String))
+  })
+
   it('calls onProgress for each progress event', async () => {
     mockStreamResponse([
       { type: 'progress', message: 'Analyzing your message...' },
