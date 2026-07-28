@@ -46,6 +46,7 @@ async function streamRequest(
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let terminated = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -68,10 +69,17 @@ async function streamRequest(
         callbacks.onMeta?.({ conversationId: event.conversationId!, title: event.title! })
       else if (event.type === 'suggestions') callbacks.onSuggestions?.(event.items!)
       else if (event.type === 'progress') callbacks.onProgress?.(event.message!)
-      else if (event.type === 'done') callbacks.onDone()
-      else if (event.type === 'error') callbacks.onError(event.message!)
+      else if (event.type === 'done') {
+        terminated = true
+        callbacks.onDone()
+      } else if (event.type === 'error') {
+        terminated = true
+        callbacks.onError(event.message!)
+      }
     }
   }
+
+  if (!terminated) callbacks.onError('Connection lost before the response finished')
 }
 
 export const api = {
