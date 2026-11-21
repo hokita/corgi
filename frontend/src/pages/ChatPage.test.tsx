@@ -117,7 +117,7 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     let capturedCallbacks: StreamCallbacks | undefined
     mockApi.createConversation.mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
       capturedCallbacks = callbacks
-      return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+      return new Promise(() => {})
     })
     mockApi.listConversations.mockResolvedValue([
       { id: 'c1', title: 'Chat 1', lastMessage: '', updatedAt: '' },
@@ -148,7 +148,7 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     mockApi.sendMessage.mockImplementation(
       (_id: string, _msg: string, callbacks: StreamCallbacks) => {
         capturedCallbacks = callbacks
-        return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+        return new Promise(() => {})
       }
     )
     mockApi.deleteConversation.mockResolvedValue(undefined)
@@ -224,7 +224,7 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     mockApi.sendMessage.mockImplementation(
       (_id: string, _msg: string, callbacks: StreamCallbacks) => {
         capturedCallbacks = callbacks
-        return new Promise(() => {}) // simulates a request that never resolves (still streaming)
+        return new Promise(() => {})
       }
     )
 
@@ -239,20 +239,17 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(capturedCallbacks).toBeDefined())
 
-    // switch away to a different conversation while c1 keeps streaming in the background
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 2'))
     fireEvent.click(screen.getByText('Chat 2'))
     await waitFor(() => screen.getByText('chat 2 answer'))
 
-    // switch back to c1 before the background stream has finished
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => screen.getByText('question'))
     expect(screen.queryByText('the final answer')).not.toBeInTheDocument()
 
-    // the background stream finally completes and persists the reply
     await act(async () => {
       capturedCallbacks!.onDone()
     })
@@ -272,9 +269,6 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     mockApi.getMessages.mockImplementation((id: string) => {
       if (id === 'c1') {
         c1FetchCount += 1
-        // Calls 1 and 2 are the initial open and the switch-back-before-finish
-        // fetch; both still miss the reply. Call 3 is onDone's own refetch —
-        // held open so the test controls exactly when it resolves.
         if (c1FetchCount < 3) {
           return Promise.resolve([{ role: 'user', content: 'question' }])
         }
@@ -308,25 +302,20 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     fireEvent.click(screen.getByText('Chat 2'))
     await waitFor(() => screen.getByText('chat 2 answer'))
 
-    // switch back to c1 before the background stream has finished
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => screen.getByText('question'))
 
-    // the background stream finishes while c1 is still on screen — this
-    // kicks off the completion refetch (held open by the mock above)
     await act(async () => {
       capturedCallbacks!.onDone()
     })
 
-    // before that refetch resolves, the user moves on to a third conversation
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 3'))
     fireEvent.click(screen.getByText('Chat 3'))
     await waitFor(() => screen.getByText('chat 3 answer'))
 
-    // only now does the stale refetch for c1 resolve — it must not clobber c3
     await act(async () => {
       resolveRefetch([
         { role: 'user', content: 'question' },
@@ -382,26 +371,20 @@ describe('ChatPage switching conversations while a message is streaming', () => 
     fireEvent.click(screen.getByText('Chat 2'))
     await waitFor(() => screen.getByText('chat 2 answer'))
 
-    // switch back to c1 before the background stream has finished
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => screen.getByText('question'))
 
-    // the background stream finishes while c1 is on screen — kicks off the
-    // completion refetch (held open by the mock above)
     await act(async () => {
       capturedCallbacks[0].onDone()
     })
 
-    // before that refetch resolves, the user sends ANOTHER message in the
-    // same conversation (no navigation involved this time)
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'second follow up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => expect(capturedCallbacks).toHaveLength(2))
     await waitFor(() => screen.getByText('second follow up'))
 
-    // only now does the stale refetch resolve, with data that predates the new message
     await act(async () => {
       resolveRefetch([
         { role: 'user', content: 'question' },
@@ -410,8 +393,6 @@ describe('ChatPage switching conversations while a message is streaming', () => 
       ])
     })
 
-    // the new message must survive, and new chunks must append to its
-    // placeholder rather than being lost or attached to stale state
     expect(screen.getByText('second follow up')).toBeInTheDocument()
     act(() => capturedCallbacks[1].onChunk('reply to second'))
     await waitFor(() => expect(screen.getByText('reply to second')).toBeInTheDocument())
@@ -434,13 +415,11 @@ describe('ChatPage compose button', () => {
 
     render(<ChatPage user={fakeUser} />)
 
-    // Open drawer and load a conversation
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }))
     await waitFor(() => screen.getByText('Chat 1'))
     fireEvent.click(screen.getByText('Chat 1'))
     await waitFor(() => screen.getByText('hello'))
 
-    // Click compose — should reset to empty state
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
     await waitFor(() =>
       expect(screen.getByText('Start a conversation')).toBeInTheDocument()
