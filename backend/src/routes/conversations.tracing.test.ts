@@ -7,7 +7,7 @@ import {
   SimpleSpanProcessor,
   InMemorySpanExporter,
 } from '@opentelemetry/sdk-trace-node'
-import type { AIProvider, TitleGenerator, FunctionExecutor } from '../providers/AIProvider'
+import type { AIProvider, TitleGenerator, StreamItem } from '../providers/AIProvider'
 
 const exporter = new InMemorySpanExporter()
 const tracerProvider = new NodeTracerProvider({
@@ -54,10 +54,7 @@ async function* defaultStream() {
 }
 
 const mockAI: AIProvider = {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  chatStream: vi.fn().mockImplementation((_h: unknown, _m: unknown, _e: FunctionExecutor) => {
-    return defaultStream()
-  }),
+  chatStream: vi.fn().mockImplementation(() => defaultStream()),
 }
 
 const mockTitleGen: TitleGenerator = {
@@ -80,10 +77,7 @@ function finishedSpan(name: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   exporter.reset()
-  vi.mocked(mockAI.chatStream).mockImplementation(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    (_h: unknown, _m: unknown, _e: FunctionExecutor) => defaultStream()
-  )
+  vi.mocked(mockAI.chatStream).mockImplementation(() => defaultStream())
 })
 
 describe('conversations route tracing', () => {
@@ -110,12 +104,12 @@ describe('conversations route tracing', () => {
   })
 
   it('marks the root span as ERROR when the stream fails, and still flushes', async () => {
-    vi.mocked(mockAI.chatStream).mockImplementation(() => {
-      // eslint-disable-next-line require-yield
-      return (async function* (): AsyncGenerator<string> {
-        throw new Error('stream exploded')
-      })()
-    })
+    const failingStream: AsyncIterable<StreamItem> = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => Promise.reject(new Error('stream exploded')),
+      }),
+    }
+    vi.mocked(mockAI.chatStream).mockImplementation(() => failingStream)
     const res = await request(app)
       .post('/api/conversations/conv123/messages')
       .send({ message: 'Hi' })

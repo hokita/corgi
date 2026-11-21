@@ -1,14 +1,11 @@
-// POST /api/conversations
 export interface CreateConversationRequest {
   message: string
 }
 
-// POST /api/conversations/:id/messages
 export interface SendMessageRequest {
   message: string
 }
 
-// GET /api/conversations
 export interface ConversationSummary {
   id: string
   title: string
@@ -16,7 +13,6 @@ export interface ConversationSummary {
   updatedAt: string
 }
 
-// GET /api/conversations/:id/messages
 export interface MessageResponse {
   role: 'user' | 'assistant'
   content: string
@@ -24,18 +20,15 @@ export interface MessageResponse {
   suggestions?: string[]
 }
 
-// Shared shape for an English learning record
 export interface EnglishMistakeData {
   originalText: string
   correctedText: string
   category: string
   severity: string
   patternKey: string
-  // 'mistake' = a genuine grammar/usage error; 'suggestion' = correct but unnatural phrasing
   type: 'mistake' | 'suggestion'
 }
 
-// Returned by the get_english_mistakes function call
 export interface EnglishMistakeDoc extends EnglishMistakeData {
   id: string
   uid: string
@@ -50,7 +43,6 @@ export interface GetMistakesParams {
   limit?: number
 }
 
-// SSE event types for POST /api/conversations and POST /api/conversations/:id/messages
 export type SSEEvent =
   | { type: 'meta'; conversationId: string; title: string }
   | { type: 'chunk'; text: string }
@@ -59,7 +51,6 @@ export type SSEEvent =
   | { type: 'done' }
   | { type: 'error'; message: string }
 
-// Error response (all non-SSE endpoints)
 export interface ErrorResponse {
   error: string
 }

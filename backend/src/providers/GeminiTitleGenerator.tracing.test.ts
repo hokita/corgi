@@ -60,7 +60,6 @@ describe('GeminiTitleGenerator tracing', () => {
     expect(
       JSON.parse(String(generation!.attributes['langfuse.observation.usage_details']))
     ).toEqual({ input: 40, output: 6, total: 46 })
-    // OTel 1.x: use generation.parentSpanId instead
     expect(generation!.parentSpanContext?.spanId).toBe(root!.spanContext().spanId)
   })
 

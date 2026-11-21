@@ -21,14 +21,7 @@ export function useChatStream({
 }: UseChatStreamArgs) {
   const [sending, setSending] = useState(false)
   const [currentStep, setCurrentStep] = useState<string | null>(null)
-  // Identifies the in-flight stream. Bumped whenever the user leaves the
-  // conversation being streamed into (switches conversation, starts a new
-  // chat) so the abandoned stream's callbacks stop touching UI state — the
-  // request itself keeps running so the backend can still persist the reply.
   const generation = useRef(0)
-  // Mirrors the activeId prop so callbacks running long after the render
-  // that started them (e.g. onDone firing after the user has navigated
-  // elsewhere and back) can see which conversation is on screen right now.
   const activeIdRef = useRef(activeId)
   useEffect(() => {
     activeIdRef.current = activeId
@@ -77,11 +70,8 @@ export function useChatStream({
     let conversationId = activeId ?? ''
     let accumulated = ''
     const callbacks: StreamCallbacks = {
-      // Only ever fired when creating a new conversation
       onMeta: ({ conversationId: newId, title }) => {
         conversationId = newId
-        // The conversation was really created server-side, so it belongs in
-        // the list regardless of whether the user is still looking at it.
         setConversations((prev) => [
           { id: newId, title, lastMessage: '', updatedAt: new Date().toISOString() },
           ...prev,
@@ -104,8 +94,6 @@ export function useChatStream({
         if (isCurrent()) setCurrentStep(step)
       },
       onDone: () => {
-        // Keep the sidebar's last-message preview accurate even if the user
-        // has since navigated away from this conversation.
         setConversations((prev) =>
           prev.map((c) =>
             c.id === conversationId
@@ -114,15 +102,7 @@ export function useChatStream({
           )
         )
         if (!isCurrent()) {
-          // The user abandoned this stream but has since navigated back to
-          // the same conversation. The reply was only persisted just now, so
-          // the messages fetched on that earlier navigation don't include
-          // it — refetch so it actually shows up.
           if (activeIdRef.current === conversationId) {
-            // Snapshot the generation so a stale response can't overwrite
-            // state that's moved on by the time it resolves — whether the
-            // user navigated away or just started another send in this same
-            // conversation (both bump `generation`).
             const generationAtRefetch = generation.current
             api
               .getMessages(conversationId)

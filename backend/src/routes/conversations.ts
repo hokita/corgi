@@ -46,9 +46,6 @@ async function streamAndPersist(opts: {
 
   const executeFn = makeExecutor(uid, conversationId, res)
 
-  // Root observation for the request: provider generations and tool spans
-  // nest under it via OTel context. Trace-level input/output are what the
-  // Langfuse UI lists; the span's own input/output mirror them.
   await startActiveObservation('chat', async (span) => {
     await propagateAttributes({ metadata: { conversationId } }, async () => {
       span.setTraceIO({ input: toTraceValue(message) })

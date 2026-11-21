@@ -129,8 +129,6 @@ export async function listEnglishMistakes(
 
   const snap = await query.limit(params.limit ?? 50).get()
   let docs = snap.docs.map((d): EnglishMistakeDoc => {
-    // Pick fields explicitly — spreading d.data() would leak stray Firestore
-    // fields into the function-call response sent to Gemini.
     const data = d.data() as Omit<EnglishMistakeDoc, 'id' | 'createdAt'> & {
       createdAt: Timestamp
     }
