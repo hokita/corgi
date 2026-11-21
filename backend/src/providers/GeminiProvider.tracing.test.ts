@@ -164,7 +164,6 @@ describe('GeminiProvider tracing: tool calls and follow-up', () => {
     for (const name of ['gemini-chat', 'tool:get_hacker_news_briefing', 'gemini-chat-followup']) {
       const child = finishedSpan(name)!
       expect(child.spanContext().traceId).toBe(root.spanContext().traceId)
-      // OTel 1.x: use child.parentSpanId instead
       expect(child.parentSpanContext?.spanId).toBe(root.spanContext().spanId)
     }
   })

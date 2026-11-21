@@ -18,10 +18,6 @@ describe('RepetitionGuard', () => {
   })
 
   it('detects a loop even when the stream stops mid-copy', () => {
-    // A single append whose text ends mid-copy: the only check that runs is
-    // against the unaligned tail, so this passes only if detection is
-    // rotation-invariant (chunked feeding would detect at an aligned copy
-    // boundary first and never exercise the partial tail).
     const guard = new RepetitionGuard()
     expect(guard.append(LOOP_SENTENCE.repeat(3) + LOOP_SENTENCE.slice(0, 30))).toBe(true)
   })

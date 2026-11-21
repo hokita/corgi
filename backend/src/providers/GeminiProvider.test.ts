@@ -3,7 +3,6 @@ import type { StreamItem, FunctionExecutor } from './AIProvider'
 
 const mockSendMessageStream = vi.fn()
 const mockGenerateContentStream = vi.fn()
-// Used by the separate flash-lite suggestion call (model.generateContent).
 const mockGenerateContent = vi.fn()
 const mockStartChat = vi.fn(() => ({ sendMessageStream: mockSendMessageStream }))
 const mockGetGenerativeModel = vi.fn(() => ({
@@ -12,8 +11,6 @@ const mockGetGenerativeModel = vi.fn(() => ({
   generateContent: mockGenerateContent,
 }))
 
-// Builds a generateContent result the way the suggestion model returns it:
-// JSON text with a `suggestions` array.
 function suggestionResult(items: string[]) {
   return {
     response: {
@@ -53,7 +50,6 @@ describe('GeminiProvider', () => {
 
   it('includes current JST datetime in system instruction', async () => {
     vi.useFakeTimers()
-    // 2026-06-27T10:00:00Z = 2026-06-27T19:00:00+09:00 in JST
     vi.setSystemTime(new Date('2026-06-27T10:00:00.000Z'))
 
     async function* fakeStream() {
@@ -174,8 +170,6 @@ describe('GeminiProvider', () => {
   })
 
   it('throws when a chunk reports a blocked finishReason', async () => {
-    // chunk.text() used to throw on SAFETY/RECITATION/LANGUAGE; visibleText()
-    // must not turn those into a silently truncated successful stream.
     async function* fakeStream() {
       yield textChunk('The story begins')
       yield { candidates: [{ finishReason: 'RECITATION', content: { parts: [] } }] }
@@ -209,9 +203,6 @@ describe('GeminiProvider', () => {
   })
 
   it('appends a truncation notice when the stream hits MAX_TOKENS', async () => {
-    // Regression: MAX_TOKENS is not a blocked finishReason, so the cut-off
-    // reply used to be persisted silently as if it were complete (the HN
-    // briefing rendering a single story).
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     async function* fakeStream() {
       yield textChunk('# ☕ Morning Coffee Briefing\n\nFirst story')
@@ -257,8 +248,6 @@ describe('GeminiProvider', () => {
   })
 
   it('still makes the follow-up call when a function-call-only turn hits MAX_TOKENS', async () => {
-    // The notice must not be yielded on a pass with no visible text: that
-    // would set hasText and skip the follow-up call that writes the reply.
     async function* firstStream() {
       yield {
         candidates: [
@@ -288,9 +277,6 @@ describe('GeminiProvider', () => {
   })
 
   it('stops the stream and appends a notice when the model loops', async () => {
-    // Regression: with maxOutputTokens at 15000, a repetition loop ("Let me
-    // know if you'd like to review your English mistakes...") used to run for
-    // thousands of tokens before the truncation notice kicked in.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const loopSentence =
       "Let me know if you'd like to review your English mistakes from this conversation. "
@@ -308,12 +294,7 @@ describe('GeminiProvider', () => {
 
     expect(items[0]).toBe('Enjoy diving into the threads! ')
     expect(items[items.length - 1]).toBe(REPETITION_NOTICE)
-    // The stream must be abandoned shortly after the loop is confirmed, not
-    // drained to the end.
     expect(chunksConsumed).toBeLessThan(10)
-    // The request itself must be aborted: the SDK pumps the response to the
-    // end even when nothing reads the stream, so without an abort Gemini
-    // keeps generating (and billing) up to maxOutputTokens.
     const requestOptions = mockSendMessageStream.mock.calls[0][1] as { signal: AbortSignal }
     expect(requestOptions.signal.aborted).toBe(true)
     expect(warnSpy).toHaveBeenCalled()
@@ -350,10 +331,6 @@ describe('GeminiProvider', () => {
       for (let i = 0; i < 100; i++) yield textChunk(loopSentence)
     }
     mockSendMessageStream.mockResolvedValueOnce({ stream: firstStream() })
-    // The real SDK result carries an aggregate response promise that rejects
-    // once the request is aborted; the provider must observe that rejection
-    // or the abort crashes the process (vitest fails on unhandled rejections,
-    // so this test doubles as coverage for the rejection handler).
     mockGenerateContentStream.mockImplementationOnce(async () => ({
       stream: followUpStream(),
       response: Promise.reject(new Error('Request aborted when reading from the stream')),
@@ -491,7 +468,6 @@ describe('GeminiProvider', () => {
 
   it('does not request suggestions when the reply is empty', async () => {
     async function* fakeStream() {
-      // No text parts: nothing was generated.
     }
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
@@ -653,9 +629,6 @@ describe('GeminiProvider', () => {
   })
 
   it('sends only functionResponse parts in the follow-up user turn', async () => {
-    // Regression: mixing a text part into the functionResponse turn disrupts the
-    // thinking model's turn continuation and makes it write its reasoning as
-    // visible reply text.
     async function* firstStream() {
       yield {
         candidates: [
