@@ -7,3 +7,4 @@ dist/
 .superpowers/
 .claude/settings.local.json
 *-debug.log
+__pycache__/
