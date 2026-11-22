@@ -122,3 +122,14 @@ test("cli exits 0 when the index contains a pre-release", () => {
   const result = run("v24.22.3", JSON.stringify([release("v27.0.0-alpha.0.1.1", true)]));
   assert.equal(result.status, 0);
 });
+
+test("a Node 26 deployment is flagged only by a newer 26.x security release", () => {
+  assert.equal(newerSecurityRelease("v26.13.1", [release("v26.14.1", true)]), "v26.14.1");
+  assert.equal(newerSecurityRelease("v26.13.1", [release("v24.23.0", true), release("v28.0.0", true)]), null);
+});
+
+test("cli reports a Node 26 deployment as up to date", () => {
+  const result = run("v26.13.1", JSON.stringify([release("v26.13.1", true)]));
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "up to date: production runs v26.13.1\n");
+});
