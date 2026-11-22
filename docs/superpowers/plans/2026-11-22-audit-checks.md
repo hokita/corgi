@@ -43,7 +43,14 @@ Deviations from the spec's hints, with the reason:
 - **vite-plugin-pwa must move 0.20 → 1.3.** 0.20 only accepts vite ≤5. 0.21.2 accepts vite 6 but pulls workbox-build 7.3.0 → serialize-javascript 6.0.2 (high GHSA-5c6j-r48x-rmvq). 1.3.0 uses workbox-build 7.4.1 and is clean.
 - firebase 12.19.0 (newest 12) rather than 13: the frontend imports only `firebase/app` and `firebase/auth`, and 12 is the smaller jump.
 
-Not known yet, only CI can tell: Trivy findings in the backend image (Alpine packages, npm bundled in `node:24.22.3-alpine`, `node_modules`). They come from the draft gates PR (rollout step 1) and feed Task 2.
+Draft gates PR #37, first CI run (2026-11-22). The PR image scan and the deployed image gave the same result: **6 HIGH, 0 CRITICAL, all in the npm bundled with `node:24.22.3-alpine`**. Alpine 3.24.4 packages: 0. `/app/node_modules`: 0. Every finding has a fixed version, so Task 2 removes npm/npx from the runtime stage, which never uses them.
+
+| path in image | package | installed | IDs (fixed in) |
+|---|---|---|---|
+| `usr/local/lib/node_modules/npm/node_modules/brace-expansion` | brace-expansion | 5.0.9 | CVE-2026-102276 (5.0.10), CVE-2026-102278 (5.0.11) |
+| `usr/local/lib/node_modules/npm/node_modules/undici` | undici | 6.28.0 | CVE-2026-109383, CVE-2026-109869, CVE-2026-87018 (6.29.1), CVE-2026-19534 (6.28.1) |
+
+The same run was red, as expected, on `Audit prod deps (frontend)` (Task 1) and on the nightly's `Dev deps` jobs for backend, frontend and e2e (Tasks 3–5).
 
 ## Review Focus
 
