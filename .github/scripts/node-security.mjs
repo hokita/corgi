@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const VERSION = /^v?(\d+)\.(\d+)\.(\d+)$/;
+const PRERELEASE = /^v?\d+\.\d+\.\d+-.+$/;
 
 function parse(version) {
   const match = VERSION.exec(String(version).trim());
@@ -21,6 +22,7 @@ export function newerSecurityRelease(deployed, releases) {
   let newest = null;
   let newestParts = current;
   for (const release of releases) {
+    if (typeof release.version === "string" && PRERELEASE.test(release.version.trim())) continue;
     const parts = parse(release.version);
     if (release.security !== true || parts[0] !== current[0]) continue;
     if (compare(parts, newestParts) > 0) {

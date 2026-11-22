@@ -58,6 +58,29 @@ test("throws on an unparsable release version", () => {
   assert.throws(() => newerSecurityRelease("v24.22.3", [release("nightly", false)]));
 });
 
+test("skips a pre-release security release in the same major", () => {
+  assert.equal(newerSecurityRelease("v24.22.3", [release("v24.23.0-rc.1", true)]), null);
+});
+
+test("skips pre-releases and returns the real newer security release", () => {
+  const releases = [
+    release("v27.0.0-alpha.0.1.1", true),
+    release("v24.30.0-rc.1", true),
+    release("v24.23.0", true),
+  ];
+  assert.equal(newerSecurityRelease("v24.22.3", releases), "v24.23.0");
+});
+
+test("throws on a pre-release deployed version", () => {
+  assert.throws(() => newerSecurityRelease("v24.22.3-rc.1", [release("v24.23.0", true)]));
+});
+
+test("throws on malformed release versions", () => {
+  for (const version of ["nightly", "24.1", "", 5, null]) {
+    assert.throws(() => newerSecurityRelease("v24.22.3", [release(version, false)]));
+  }
+});
+
 const run = (deployed, indexText) => {
   const dir = mkdtempSync(join(tmpdir(), "node-security-"));
   const file = join(dir, "index.json");
@@ -93,4 +116,9 @@ test("cli exits 2 on an unreadable file", () => {
   const result = run("v24.22.3", undefined);
   assert.equal(result.status, 2);
   assert.notEqual(result.stderr, "");
+});
+
+test("cli exits 0 when the index contains a pre-release", () => {
+  const result = run("v24.22.3", JSON.stringify([release("v27.0.0-alpha.0.1.1", true)]));
+  assert.equal(result.status, 0);
 });
