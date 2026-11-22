@@ -6,9 +6,11 @@ const mockGetGenerativeModel = vi.fn(() => ({
 }))
 
 vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: mockGetGenerativeModel,
-  })),
+  GoogleGenerativeAI: vi.fn().mockImplementation(function () {
+    return {
+      getGenerativeModel: mockGetGenerativeModel,
+    }
+  }),
 }))
 
 import { GeminiTitleGenerator } from './GeminiTitleGenerator'
