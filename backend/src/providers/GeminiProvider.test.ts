@@ -21,9 +21,11 @@ function suggestionResult(items: string[]) {
 }
 
 vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: mockGetGenerativeModel,
-  })),
+  GoogleGenerativeAI: vi.fn().mockImplementation(function () {
+    return {
+      getGenerativeModel: mockGetGenerativeModel,
+    }
+  }),
   SchemaType: {
     OBJECT: 'object',
     ARRAY: 'array',
@@ -467,8 +469,7 @@ describe('GeminiProvider', () => {
   })
 
   it('does not request suggestions when the reply is empty', async () => {
-    async function* fakeStream() {
-    }
+    async function* fakeStream() {}
     mockSendMessageStream.mockResolvedValue({ stream: fakeStream() })
     const provider = new GeminiProvider('fake-key')
     await collectStream(provider.chatStream([], 'Hi', noopExecutor))
