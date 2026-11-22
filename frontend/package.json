@@ -18,7 +18,7 @@
     "@fortawesome/fontawesome-svg-core": "^7.3.0",
     "@fortawesome/free-solid-svg-icons": "^7.3.0",
     "@fortawesome/react-fontawesome": "^3.3.1",
-    "firebase": "^10.12.0",
+    "firebase": "^12.19.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-markdown": "^10.1.0",
@@ -49,5 +49,8 @@
   },
   "volta": {
     "node": "24.22.3"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
   }
 }
