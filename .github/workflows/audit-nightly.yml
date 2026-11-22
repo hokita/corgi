@@ -1,0 +1,119 @@
+name: Nightly audit
+
+on:
+  schedule:
+    - cron: '10 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prod-deps:
+    name: Prod deps (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [backend, frontend]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --omit=dev --audit-level=high
+
+  dev-deps:
+    name: Dev deps (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [backend, frontend, e2e]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Audit all dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --audit-level=high
+
+  deployed-image:
+    name: Deployed backend image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Resolve deployed image
+        id: deployed
+        run: |
+          set -euo pipefail
+          rev=$(gcloud run services describe corgi-backend --region asia-northeast1 --format='value(status.latestReadyRevisionName)')
+          test -n "$rev"
+          image=$(gcloud run revisions describe "$rev" --region asia-northeast1 --format='value(status.imageDigest)')
+          test -n "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Pull deployed image
+        env:
+          IMAGE: ${{ steps.deployed.outputs.image }}
+        run: docker pull "$IMAGE"
+
+      - name: Scan deployed image
+        env:
+          IMAGE: ${{ steps.deployed.outputs.image }}
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$IMAGE"
+
+      - name: Check Node runtime against security releases
+        env:
+          IMAGE: ${{ steps.deployed.outputs.image }}
+        run: |
+          set -euo pipefail
+          node_version=$(docker run --rm --entrypoint node "$IMAGE" --version)
+          curl -fsSL https://nodejs.org/dist/index.json -o "$RUNNER_TEMP/index.json"
+          node .github/scripts/node-security.mjs "$node_version" "$RUNNER_TEMP/index.json"
+
+  actions-pins:
+    name: Actions pinned
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Test pin scripts
+        run: node --test '.github/scripts/*.test.mjs'
+
+      - name: Check action pins
+        run: node .github/scripts/action-pins.mjs .github/workflows
