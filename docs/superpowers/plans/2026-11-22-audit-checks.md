@@ -142,7 +142,7 @@ Verification for every PR, run in its worktree after `npm ci` in `backend`, `fro
 **Interfaces:** `findUnpinned(workflowText: string): string[]` returns the offending `uses:` values. The CLI `node .github/scripts/action-pins.mjs <dir>` prints `file: value` for each and exits 1 if there are any, 0 if none.
 
 - [ ] Tests (`node:test`), red first: `actions/checkout@v4` → reported; `actions/checkout@` + 40 hex → not reported; quoted `"actions/checkout@v4"` → reported; trailing ` # v4` after a SHA → reported (no-comments rule); `./local-action` → not reported; `docker://alpine:3` → reported, `docker://alpine@sha256:<64 hex>` → not; `owner/repo/.github/workflows/x.yml@main` → reported; a 39-char hex → reported.
-- [ ] Implement until `node --test .github/scripts/` passes.
+- [ ] Implement until `node --test '.github/scripts/*.test.mjs'` passes.
 - [ ] Pin each action to the commit its current tag points to (`gh api repos/<o>/<r>/commits/<tag> --jq .sha`), with backend.yml's `google-github-actions/auth@v2` moved to v3. Then `node .github/scripts/action-pins.mjs .github/workflows` exits 0.
 - [ ] Commit `chore: pin GitHub Actions and base image by SHA, with a check`.
 
@@ -163,7 +163,7 @@ Verification for every PR, run in its worktree after `npm ci` in `backend`, `fro
 New jobs (the `name:` values become required checks):
 - `Audit prod deps (backend)` and `Audit prod deps (frontend)`: setup-node 24.22.3, `npm audit --omit=dev --audit-level=high` in the dir (no install needed).
 - `Scan backend image`: `docker build -t corgi-backend:ci backend`, then `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock <trivy pinned> image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 corgi-backend:ci`.
-- `Actions pinned`: `node --test .github/scripts/` and `node .github/scripts/action-pins.mjs .github/workflows`.
+- `Actions pinned`: `node --test '.github/scripts/*.test.mjs'` and `node .github/scripts/action-pins.mjs .github/workflows`.
 
 - [ ] Push and open as a **draft** PR (rollout step 1). Record each job's result in Findings. Red jobs here are expected until PR 1/2 merge.
 - [ ] Commit `ci: audit prod deps, scan backend image, check action pins`.
@@ -175,8 +175,10 @@ New jobs (the `name:` values become required checks):
 Jobs (each separate, `defaults.run.shell: bash` with `set -euo pipefail`):
 - `prod-deps` (matrix `backend`, `frontend`): `npm audit --omit=dev --audit-level=high`.
 - `dev-deps` (matrix `backend`, `frontend`, `e2e`): `npm audit --audit-level=high`.
-- `deployed-image`: auth (same inputs as backend.yml), `gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet`, revision = `gcloud run services describe corgi-backend --region asia-northeast1 --format='value(status.latestReadyRevisionName)'`, image = `gcloud run revisions describe "$rev" --region asia-northeast1 --format='value(status.imageDigest)'`, `docker pull "$image"`, the Trivy command from Task 8 on `$image`, `node_version=$(docker run --rm --entrypoint node "$image" --version)`, `curl -fsSL https://nodejs.org/dist/index.json -o "$RUNNER_TEMP/index.json"`, `node .github/scripts/node-security.mjs "$node_version" "$RUNNER_TEMP/index.json"`. The image ref is never echoed to the summary.
-- `actions-pins`: same as the PR job.
+- `deployed-image`: auth (same inputs as backend.yml), `gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet`, revision = `gcloud run services describe corgi-backend --region asia-northeast1 --format='value(status.latestReadyRevisionName)'`, image = `gcloud run revisions describe "$rev" --region asia-northeast1 --format='value(status.imageDigest)'`, `docker pull "$image"`, the Trivy command from Task 8 on `$image`. The image ref is never echoed to the summary.
+- `deployed-node` (name `Deployed backend Node version`): checkout, setup-node, then the same auth, configure-docker, resolve and `docker pull` steps as `deployed-image`, then `node_version=$(docker run --rm --entrypoint node "$image" --version)`, `curl -fsSL https://nodejs.org/dist/index.json -o "$RUNNER_TEMP/index.json"`, `node .github/scripts/node-security.mjs "$node_version" "$RUNNER_TEMP/index.json"`.
+- `actions-pins` (name `Actions pinned (nightly)`): same as the PR job.
+- The workflow `name:` is `Audit (nightly)`.
 
 - [ ] Run it on the branch: `gh workflow run audit-nightly.yml --ref chore/audit-checks` (WIF checks only the repository for corgi, so a branch run authenticates). All jobs green after PR 1/2, or failures recorded.
 - [ ] Commit `ci: nightly audit of deps, deployed image, Node runtime and action pins`.
